@@ -1,117 +1,46 @@
 <!DOCTYPE html>
 <html>
-<head>
-<title>HorseRanker V4 - Full Functions</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
-  body {font-family: Arial; padding: 20px; background:#0a0a0a; color:#fff;}
-  input, button {padding:12px; margin:10px 5px; background:#222; color:#fff; border:1px solid #555; border-radius:5px;}
-  button {background:#00ff88; color:#000; font-weight:bold; cursor:pointer;}
- .exportBtn {background:#4da6ff;}
-  table {width:100%; border-collapse: collapse; margin-top:20px;}
-  th, td {border:1px solid #444; padding:10px; text-align:center;}
-  th {background:#00ff88; color:#000;}
-.rank1 {background:#1a331a; color:#00ff88;}
-.rank2 {background:#1a2a33; color:#4da6ff;}
-.rank3 {background:#332a1a; color:#ffcc66;}
-</style>
+<head><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tabtouch Fetcher</title>
+<style>body{font-family:Arial; padding:10px; background:#111; color:#eee}
+input,button{padding:10px; margin:5px; width:95%; font-size:16px}
+table{width:100%; border-collapse:collapse; margin-top:10px}
+td,th{border:1px solid #444; padding:6px; text-align:left}
+th{background:#222}</style>
 </head>
 <body>
-<h1>🏇 HorseRanker V4</h1>
-<input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
-<br>
-<button onclick="handleFileUpload()">RANK HORSES</button>
-<button class="exportBtn" onclick="exportToExcel()">DOWNLOAD RANKED EXCEL</button>
-<div id="results"></div>
-
+<h2>Tabtouch Race Fetcher</h2>
+<input id="race" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/6">
+<input id="user" placeholder="Tabtouch Username">
+<input id="pass" type="password" placeholder="Tabtouch Password">
+<button onclick="fetchRace()">FETCH RACE</button>
+<div id="status"></div><div id="results"></div>
 <script>
-let globalHorses = []; // Store data for export
+const API_URL = "https://tabtouch-api.onrender.com"; // <-- CHANGE THIS
 
-// FUNCTION 1: Read Excel File
-function handleFileUpload(){
-  let file = document.getElementById('fileInput').files[0];
-  if(!file){ alert("Please select Excel file first"); return; }
-
-  let reader = new FileReader();
-  reader.onload = function(e){
-    let data = new Uint8Array(e.target.result);
-    let workbook = XLSX.read(data, {type: 'array'});
-    let sheet = workbook.Sheets[workbook.SheetNames[0]];
-    let rows = XLSX.utils.sheet_to_json(sheet, {defval: ""});
-    globalHorses = processHorses(rows);
-    displayTable(globalHorses);
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// FUNCTION 2: Calculate Ranking Score
-// FUNCTION 2: Process + Score
-function processHorses(rows){
-  let horses = [];
-  rows.forEach((row) => {
-    if(String(row.scratched).toUpperCase() === "TRUE") return;
-
-    let odds = parseFloat(row.winDiv) || 99;
-    let weight = parseFloat(row.weight) || 57;
-    let barrier = parseInt(row.barrier) || 99;
-
-    let score = ((1/odds)*100) + ((62-weight)*2) + ((barrier>=1&&barrier<=10)?(11-barrier)*2:0);
-
-    horses.push({
-      rank: 0,
-      J: row.number || '',        // J = Horse No
-      K: "$" + row.winDiv || '',  // K = Odds 
-      L: '',                      // L = Placing text like "Fav", "2nd", "3rd"
-      M: row.starterName || '',   // M = Horse Name
-      N: '',                      // N = Blank or we can put Jockey
-      score: score
+async function fetchRace(){
+  document.getElementById('status').innerText = "Fetching...";
+  let res = await fetch(API_URL + '/api/tabtouch', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      url: document.getElementById('race').value,
+      username: document.getElementById('user').value,
+      password: document.getElementById('pass').value
+    })
+  });
+  let data = await res.json();
+  if(data.ok){
+    document.getElementById('status').innerText = "Done";
+    let table = `<table><tr><th>No</th><th>Horse</th><th>Jockey</th><th>Barrier</th><th>Odds</th></tr>`;
+    data.horses.forEach(h => {
+      table += `<tr><td>${h.J}</td><td>${h.K}</td><td>${h.L}</td><td>${h.N}</td><td>${h.M}</td></tr>`;
     });
-  });
-  
-  horses.sort((a,b) => b.score - a.score);
-  horses.forEach((h,i) => {
-    h.rank = i+1;
-    // Add placing text
-    if(h.rank===1) h.L = "Fav";
-    else if(h.rank===2) h.L = "2nd";
-    else if(h.rank===3) h.L = "3rd";
-    else if(h.rank===4) h.L = "4th";
-    else if(h.rank===5) h.L = "5th";
-    else h.L = h.rank + "th";
-  });
-  return horses;
-}
-// FUNCTION 3: Display Only J to N with Color
-function displayTable(horses){
-  let table = `<h3>RESULTS - COLUMNS J TO N</h3>
-  <table id="resultTable">
-    <tr><th>Rank</th><th>J</th><th>K</th><th>L</th><th>M</th><th>N</th><th>Score</th></tr>`;
-
-  horses.forEach(h => {
-    let rowClass = h.rank===1? 'rank1' : h.rank===2? 'rank2' : h.rank===3? 'rank3' : '';
-    table += `<tr class="${rowClass}">
-      <td><b>${h.rank}</b></td>
-      <td>${h.J}</td><td>${h.K}</td><td>${h.L}</td><td>${h.M}</td><td>${h.N}</td>
-      <td><b>${h.score.toFixed(2)}</b></td>
-    </tr>`;
-  });
-  table += `</table>`;
-  document.getElementById('results').innerHTML = table;
-}
-
-// FUNCTION 4: Export Ranked J-N to Excel
-function exportToExcel(){
-  if(globalHorses.length === 0){ alert("Rank horses first"); return; }
-
-  let ws_data = [["Rank","J","K","L","M","N","Score"]];
-  globalHorses.forEach(h => {
-    ws_data.push([h.rank, h.J, h.K, h.L, h.M, h.N, h.score.toFixed(2)]);
-  });
-
-  let ws = XLSX.utils.aoa_to_sheet(ws_data);
-  let wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Ranked Results");
-  XLSX.writeFile(wb, "HorseRanker_Results.xlsx");
+    table += `</table>`;
+    document.getElementById('results').innerHTML = table;
+  } else {
+    document.getElementById('status').innerText = "Error: " + data.error;
+  }
 }
 </script>
 </body>
