@@ -24,119 +24,51 @@
 </style>
 </head>
 <body>
-
 <h2>🏇 HorseRanker V4</h2>
 Race: <input id="raceId" value="MR" placeholder="MR">
 No: <input id="raceNo" value="7" type="number">
 <button class="btn-blue" onclick="toggleTheme()">🌙</button><br><br>
-
 <button onclick="fetchRace()">GET HORSES</button>
 <button class="btn-blue" onclick="saveRace()">SAVE</button>
 <button class="btn-red" onclick="clearAll()">CLEAR</button>
 <div id="status"></div>
-
 <div id="info"></div>
 <table id="result"></table>
-
 <script>
 let oldData = JSON.parse(localStorage.getItem('horseOldData')) || {};
 let refreshTimer = null;
-
 async function fetchRace(){
   let raceId = document.getElementById('raceId').value.toUpperCase();
   let raceNo = document.getElementById('raceNo').value;
   let raceKey = raceId + raceNo;
-  let today = new Date();
-  let dd = String(today.getDate()).padStart(2,'0');
-  let mm = String(today.getMonth()+1).padStart(2,'0');
-  let yyyy = today.getFullYear();
+  let today = new Date(); let dd = String(today.getDate()).padStart(2,'0'); let mm = String(today.getMonth()+1).padStart(2,'0'); let yyyy = today.getFullYear();
   let dateStr = dd > 13? `${dd}.${mm}.${yyyy}` : `${mm}.${dd}.${yyyy}`;
-
-  // GITHUB CAN FETCH OZBET DIRECT - NO PROXY NEEDED
-  let ozbetUrl = `https://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${dateStr}&p_fixture_id=${raceId}&p_contest_number=${raceNo}`;
-   let url = `https://api.allorigins.win/raw?url=` + encodeURIComponent(ozbetUrl);
+  let url = `https://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${dateStr}&p_fixture_id=${raceId}&p_contest_number=${raceNo}`;
   document.getElementById('status').innerText = "Fetching " + raceKey + "...";
-
   try{
-    let res = await fetch(url);
-    let txt = await res.text();
+    let res = await fetch(url); let txt = await res.text();
     document.getElementById('status').innerText = "Loaded " + raceKey + " at " + new Date().toLocaleTimeString();
     processData(txt, raceKey);
-
-    if(confirm("Auto Refresh " + raceKey + " every 30s?")){
-      clearInterval(refreshTimer);
-      refreshTimer = setInterval(()=>fetchRace(), 30000);
-    } else { clearInterval(refreshTimer); }
-
-  } catch(e){
-    document.getElementById('status').innerText = "Error. Try again";
-  }
+    if(confirm("Auto Refresh " + raceKey + " every 30s?")){ clearInterval(refreshTimer); refreshTimer = setInterval(()=>fetchRace(), 30000); } else { clearInterval(refreshTimer); }
+  } catch(e){ document.getElementById('status').innerText = "Error. Try again"; }
 }
-
 function processData(txt, raceKey){
-  let rows = txt.split('\n').map(r=>r.split(','));
-  let horses = [];
-  for(let i=1; i<rows.length; i++){
-    if(!rows[i][0]) break;
-    let no = rows[i][0];
-    let win = parseFloat(rows[i][1]) || 0;
-    horses.push({no, win});
-  }
-
+  let rows = txt.split('\n').map(r=>r.split(',')); let horses = [];
+  for(let i=1; i<rows.length; i++){ if(!rows[i][0]) break; let no = rows[i][0]; let win = parseFloat(rows[i][1]) || 0; horses.push({no, win}); }
   let raceOld = oldData[raceKey] || {};
-  horses.forEach(h=>{
-    let old = raceOld[h.no];
-    let pct = old && old>0? Math.round((old/h.win - 1)*100) : 0;
-    h.pct = pct;
-    h.pctTxt = pct>0? `<span class='up'>+${pct}↑</span>` : pct<0? `<span class='down'>${pct}↓</span>` : "NEW";
-  });
-
+  horses.forEach(h=>{ let old = raceOld[h.no]; let pct = old && old>0? Math.round((old/h.win - 1)*100) : 0; h.pct = pct; h.pctTxt = pct>0? `<span class='up'>+${pct}↑</span>` : pct<0? `<span class='down'>${pct}↓</span>` : "NEW"; });
   horses.forEach(h=> h.score = h.win + (h.win * h.pct / 100));
-
-  let e = horses.filter(h=>h.win>0 && h.win<=23.2).length;
-  let d = horses.filter(h=>h.win>23.21 && h.win<=66.66).length;
-  let total = e+d; let x = horses.length;
-  let fic = total<=8.1?"X": total==9&&e>=5?"Q": total>=10&&total<=12.1&&e<=8.9?"A": total>=10&&total<=12.1&&e>=9?"B":"";
-  let yyy = "maybe"; let yyyClass="maybe";
-  if(total>=10&&total<=12.1&&x==14){ yyy = e<=9? "no A14 ":"B14/BE YES "; yyyClass = e<=9? "no":"yes"; }
-
+  let e = horses.filter(h=>h.win>0 && h.win<=23.2).length; let d = horses.filter(h=>h.win>23.21 && h.win<=66.66).length; let total = e+d; let x = horses.length;
+  let fic = total<=8.1?"X": total==9&&e>=5?"Q": total>=10&&total<=12.1&&e<=8.9?"A": total>=10&&total<=12.1&&e>=9?"B": total>=12.11&&total<=15&&e<=12.9?"C": total>=12.11&&total<=15&&e>=13?"D": total>=15.1&&total<=18&&e<=15.9?"E":"";
+  let yyy = "maybe"; let yyyClass="maybe"; if(total>=10&&total<=12.1&&x==14){ yyy = e<=9? "no A14 ":"B14/BE YES "; yyyClass = e<=9? "no":"yes"; }
   horses.sort((a,b)=>b.score-a.score);
-
   let html = "<tr><th>Rank</th><th>Horse</th><th>Win</th><th>Score</th><th>%Chg</th></tr>";
-  horses.forEach((h,i)=>{
-    let cls = i==0?"fav": i<=5?"g2-6": i<=7?"g7-8": i==8?"g9":"";
-    html += `<tr class='${cls}'><td>${i+1}</td><td>${h.no}</td><td>${h.win}</td><td>${h.score.toFixed(2)}</td><td>${h.pctTxt}</td></tr>`;
-  });
-  document.getElementById('result').innerHTML = html;
-  document.getElementById('info').innerHTML = `
-    <div class='info'>Q4: ${e}+${d}</div>
-    <div class='info'>R4: ${fic}</div>
-    <div class='info ${yyyClass}'>Q5: ${yyy}</div>
-  `;
+  horses.forEach((h,i)=>{ let cls = i==0?"fav": i<=5?"g2-6": i<=7?"g7-8": i==8?"g9":""; html += `<tr class='${cls}'><td>${i+1}</td><td>${h.no}</td><td>${h.win}</td><td>${h.score.toFixed(2)}</td><td>${h.pctTxt}</td></tr>`; });
+  document.getElementById('result').innerHTML = html; document.getElementById('info').innerHTML = `<div class='info'>Q4: ${e}+${d}</div><div class='info'>R4: ${fic}</div><div class='info ${yyyClass}'>Q5: ${yyy}</div>`;
 }
-
-function saveRace(){
-  let raceKey = document.getElementById('raceId').value.toUpperCase() + document.getElementById('raceNo').value;
-  let rows = document.getElementById('result').rows;
-  let raceOld = {};
-  for(let i=1; i<rows.length; i++){
-    raceOld[rows[i].cells[1].innerText] = parseFloat(rows[i].cells[2].innerText);
-  }
-  oldData[raceKey] = raceOld;
-  localStorage.setItem('horseOldData', JSON.stringify(oldData));
-  alert(raceKey + " Saved!");
-}
-
-function clearAll(){
-  clearInterval(refreshTimer);
-  document.getElementById('result').innerHTML = "";
-  document.getElementById('info').innerHTML = "";
-  document.getElementById('status').innerText = "";
-}
-
-function toggleTheme(){
-  document.body.classList.toggle('light');
-}
+function saveRace(){ let raceKey = document.getElementById('raceId').value.toUpperCase() + document.getElementById('raceNo').value; let rows = document.getElementById('result').rows; let raceOld = {}; for(let i=1; i<rows.length; i++){ raceOld[rows[i].cells[1].innerText] = parseFloat(rows[i].cells[2].innerText); } oldData[raceKey] = raceOld; localStorage.setItem('horseOldData', JSON.stringify(oldData)); alert(raceKey + " Saved!"); }
+function clearAll(){ clearInterval(refreshTimer); document.getElementById('result').innerHTML = ""; document.getElementById('info').innerHTML = ""; document.getElementById('status').innerText = ""; }
+function toggleTheme(){ document.body.classList.toggle('light'); }
 </script>
 </body>
 </html>
