@@ -1,23 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>HorseRanker V4 - Tabtouch Excel</title>
+<title>HorseRanker V4 - Tabtouch</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  body {font-family: Arial; padding: 20px; background:#111; color:#fff;}
-  input, button {padding:12px; margin:10px 0; background:#222; color:#fff; border:1px solid #555;}
-  button {background:#00ff88; color:#000; font-weight:bold; cursor:pointer;}
- .horse {padding:10px; border-bottom:1px solid #333; margin-bottom:5px;}
- .top3 {background:#1a331a; border-left:4px solid #00ff88;}
+  body {font-family: Arial; padding: 20px; background:#0a0a0a; color:#fff;}
+  input, button {padding:12px; margin:10px 0; background:#222; color:#fff; border:1px solid #555; border-radius:5px;}
+  button {background:#00ff88; color:#000; font-weight:bold; cursor:pointer; font-size:16px;}
+.horse {padding:12px; border-bottom:1px solid #333; margin-bottom:5px; border-radius:5px;}
+.top1 {background:#1a331a; border-left:5px solid gold;}
+.top2 {background:#1a2a33; border-left:5px solid silver;}
+.top3 {background:#332a1a; border-left:5px solid #cd7f32;}
 </style>
 </head>
 <body>
 <h1>🏇 HorseRanker V4 - Tabtouch</h1>
 
-<h3>Step 1: Download Excel from Tabtouch</h3>
-<p>Click "Export to Excel" on Tabtouch race page</p>
-
-<h3>Step 2: Upload File Here</h3>
+<h3>Step 1: Download Excel from Tabtouch race</h3>
+<h3>Step 2: Upload Below</h3>
 <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
 <br>
 <button onclick="readFile()">RANK HORSES</button>
@@ -34,7 +34,7 @@ function readFile(){
     let data = new Uint8Array(e.target.result);
     let workbook = XLSX.read(data, {type: 'array'});
     let sheet = workbook.Sheets[workbook.SheetNames[0]];
-    let rows = XLSX.utils.sheet_to_json(sheet);
+    let rows = XLSX.utils.sheet_to_json(sheet, {defval: ""});
     rankHorses(rows);
   };
   reader.readAsArrayBuffer(file);
@@ -42,32 +42,41 @@ function readFile(){
 
 function rankHorses(rows){
   let horses = [];
+  let runnerNo = 1;
 
   rows.forEach(row => {
-    if(row.scratched === true || row.scratched === "TRUE") return; // skip scratched
+    // Skip scratched horses
+    if(String(row.scratched).toUpperCase() === "TRUE") return;
     
-    let number = row['number'];
+    let number = row['number'] || runnerNo;
     let name = row['starterName'];
     let jockey = row['staterName2'] || '';
     let odds = parseFloat(row['winDiv']) || 99;
     let weight = parseFloat(row['weight']) || 57;
-    let barrier = row['barrier'] || '';
+    let barrier = parseInt(row['barrier']) || 99;
 
-    horses.push({number, name, jockey, odds, weight, barrier});
+    if(name){
+      horses.push({number, name, jockey, odds, weight, barrier});
+      runnerNo++;
+    }
   });
 
-  // Ranking Formula: Better odds + Lighter weight + Good barrier = Higher score
+  // Ranking Formula: Lower odds + Lower weight + Inside barrier = Better
   horses.forEach(h => {
-    let barrierBonus = (h.barrier >= 1 && h.barrier <= 8)? 5 : 0; // inside barriers better
-    h.score = (1/h.odds * 100) + (60 - h.weight) + barrierBonus;
+    let oddsScore = (1/h.odds) * 100;
+    let weightScore = (62 - h.weight); // lighter is better
+    let barrierScore = (h.barrier <= 10)? (11 - h.barrier) : 0; // inside barriers bonus
+    h.score = oddsScore + weightScore + barrierScore;
   });
   horses.sort((a,b) => b.score - a.score);
 
-  let result = '<h3>🏆 Ranked Horses</h3>';
+  let result = '<h3>🏆 TOP PICKS</h3>';
   horses.forEach((h,i) => {
-    let topClass = i < 3? 'top3' : '';
-    result += `<div class="horse ${topClass}"><b>${i+1}. #${h.number} ${h.name}</b> <br>
-    Jockey: ${h.jockey} | Odds: $${h.odds} | Weight: ${h.weight}kg | Barrier: ${h.barrier} | Score: ${h.score.toFixed(2)}</div>`;
+    let topClass = i===0? 'top1' : i===1? 'top2' : i===2? 'top3' : '';
+    result += `<div class="horse ${topClass}">
+      <b>${i+1}. #${h.number} ${h.name}</b><br>
+      Jockey: ${h.jockey} | Odds: $${h.odds} | Weight: ${h.weight}kg | Barrier: ${h.barrier} | <b>Score: ${h.score.toFixed(2)}</b>
+    </div>`;
   });
   document.getElementById('results').innerHTML = result;
 }
