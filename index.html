@@ -43,7 +43,7 @@ async function fetchRace(){
   let raceKey = raceId + raceNo;
   let today = new Date(); let dd = String(today.getDate()).padStart(2,'0'); let mm = String(today.getMonth()+1).padStart(2,'0'); let yyyy = today.getFullYear();
   let dateStr = dd > 13? `${dd}.${mm}.${yyyy}` : `${mm}.${dd}.${yyyy}`;
-  let ozbetUrl = `https://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${dateStr}&p_fixture_id=${raceId}&p_contest_number=${raceNo}`;
+  let ozbetUrl = `https://www.tabtouch.com.au/tabtouch/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${dateStr}&p_fixture_id=${raceId}&p_contest_number=${raceNo}`;
   let url = `https://api.allorigins.win/raw?url=` + encodeURIComponent(ozbetUrl);
   document.getElementById('status').innerText = "Fetching " + raceKey + "...";
   try{
