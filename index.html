@@ -15,9 +15,7 @@
 </head>
 <body>
 <h1>🏇 HorseRanker V4 - Tabtouch</h1>
-
-<h3>Step 1: Download Excel from Tabtouch race</h3>
-<h3>Step 2: Upload Below</h3>
+<p>1. Download Excel from Tabtouch > 2. Upload below</p>
 <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
 <br>
 <button onclick="readFile()">RANK HORSES</button>
@@ -42,30 +40,33 @@ function readFile(){
 
 function rankHorses(rows){
   let horses = [];
-  let runnerNo = 1;
 
-  rows.forEach(row => {
-    // Skip scratched horses
+  rows.forEach((row, index) => {
+    // Skip scratched
     if(String(row.scratched).toUpperCase() === "TRUE") return;
     
-    let number = row['number'] || runnerNo;
-    let name = row['starterName'];
-    let jockey = row['staterName2'] || '';
-    let odds = parseFloat(row['winDiv']) || 99;
-    let weight = parseFloat(row['weight']) || 57;
-    let barrier = parseInt(row['barrier']) || 99;
+    let number = row.number || (index + 1); // use row number if blank
+    let name = row.starterName;
+    let jockey = row.staterName2 || '';
+    let odds = parseFloat(row.winDiv) || 99;
+    let weight = parseFloat(row.weight) || 57;
+    let barrier = parseInt(row.barrier) || 99;
 
-    if(name){
+    if(name && name.trim()!== ""){
       horses.push({number, name, jockey, odds, weight, barrier});
-      runnerNo++;
     }
   });
 
-  // Ranking Formula: Lower odds + Lower weight + Inside barrier = Better
+  if(horses.length === 0){
+    document.getElementById('results').innerHTML = "No horses found. Check if file has data.";
+    return;
+  }
+
+  // Ranking: Odds 50% + Weight 30% + Barrier 20%
   horses.forEach(h => {
     let oddsScore = (1/h.odds) * 100;
-    let weightScore = (62 - h.weight); // lighter is better
-    let barrierScore = (h.barrier <= 10)? (11 - h.barrier) : 0; // inside barriers bonus
+    let weightScore = (62 - h.weight) * 2;
+    let barrierScore = (h.barrier >=1 && h.barrier <=10)? (11 - h.barrier) * 2 : 0;
     h.score = oddsScore + weightScore + barrierScore;
   });
   horses.sort((a,b) => b.score - a.score);
