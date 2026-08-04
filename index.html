@@ -1,59 +1,73 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>HorseRanker V4</title>
+<title>HorseRanker V4 - Tabtouch Excel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body {font-family: Arial; padding: 20px; background:#111; color:#fff;}
-  textarea {width:100%; height:200px; background:#222; color:#fff; border:1px solid #555;}
-  button {padding:12px 20px; background:#00ff88; border:none; font-weight:bold; cursor:pointer; margin-top:10px;}
-  #results {margin-top:20px;}
- .horse {padding:8px; border-bottom:1px solid #333;}
+  input, button {padding:12px; margin:10px 0; background:#222; color:#fff; border:1px solid #555;}
+  button {background:#00ff88; color:#000; font-weight:bold; cursor:pointer;}
+ .horse {padding:10px; border-bottom:1px solid #333; margin-bottom:5px;}
+ .top3 {background:#1a331a; border-left:4px solid #00ff88;}
 </style>
 </head>
 <body>
-<h1>🏇 HorseRanker V4</h1>
+<h1>🏇 HorseRanker V4 - Tabtouch</h1>
 
-<h3>Step 1: Copy from OZbet</h3>
-<p>Open OZbet race > Ctrl+A > Ctrl+C > Paste below</p>
-<textarea id="ozbetPaste" placeholder="Paste OZbet race page here..."></textarea>
+<h3>Step 1: Download Excel from Tabtouch</h3>
+<p>Click "Export to Excel" on Tabtouch race page</p>
+
+<h3>Step 2: Upload File Here</h3>
+<input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
 <br>
-<button onclick="parseData()">PARSE & RANK HORSES</button>
+<button onclick="readFile()">RANK HORSES</button>
 
 <div id="results"></div>
 
 <script>
-function parseData(){
-  let text = document.getElementById('ozbetPaste').value;
-  let lines = text.split('\n');
+function readFile(){
+  let file = document.getElementById('fileInput').files[0];
+  if(!file){ alert("Please select Excel file first"); return; }
+
+  let reader = new FileReader();
+  reader.onload = function(e){
+    let data = new Uint8Array(e.target.result);
+    let workbook = XLSX.read(data, {type: 'array'});
+    let sheet = workbook.Sheets[workbook.SheetNames[0]];
+    let rows = XLSX.utils.sheet_to_json(sheet);
+    rankHorses(rows);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function rankHorses(rows){
   let horses = [];
 
-  // Regex to catch: "1. HORSE NAME 3.50 57.0kg"
-  lines.forEach(line => {
-    let match = line.match(/(\d+)[\.\)]\s+([A-Za-z0-9\s\-\'\(\)]+?)\s+([\d\.]+)\s+([\d\.]+)kg/i);
-    if(match){
-      horses.push({
-        number: match[1],
-        name: match[2].trim(),
-        odds: parseFloat(match[3]),
-        weight: parseFloat(match[4])
-      });
-    }
+  rows.forEach(row => {
+    if(row.scratched === true || row.scratched === "TRUE") return; // skip scratched
+    
+    let number = row['number'];
+    let name = row['starterName'];
+    let jockey = row['staterName2'] || '';
+    let odds = parseFloat(row['winDiv']) || 99;
+    let weight = parseFloat(row['weight']) || 57;
+    let barrier = row['barrier'] || '';
+
+    horses.push({number, name, jockey, odds, weight, barrier});
   });
 
-  if(horses.length === 0){
-    document.getElementById('results').innerHTML = "No horses found. Make sure you pasted the full race page.";
-    return;
-  }
-
-  // Ranking Formula: Better odds + Lighter weight = Higher score
+  // Ranking Formula: Better odds + Lighter weight + Good barrier = Higher score
   horses.forEach(h => {
-    h.score = (1/h.odds * 100) + (60 - h.weight);
+    let barrierBonus = (h.barrier >= 1 && h.barrier <= 8)? 5 : 0; // inside barriers better
+    h.score = (1/h.odds * 100) + (60 - h.weight) + barrierBonus;
   });
   horses.sort((a,b) => b.score - a.score);
 
   let result = '<h3>🏆 Ranked Horses</h3>';
   horses.forEach((h,i) => {
-    result += `<div class="horse"><b>${i+1}. #${h.number} ${h.name}</b> <br> Odds: $${h.odds} | Weight: ${h.weight}kg | Score: ${h.score.toFixed(2)}</div>`;
+    let topClass = i < 3? 'top3' : '';
+    result += `<div class="horse ${topClass}"><b>${i+1}. #${h.number} ${h.name}</b> <br>
+    Jockey: ${h.jockey} | Odds: $${h.odds} | Weight: ${h.weight}kg | Barrier: ${h.barrier} | Score: ${h.score.toFixed(2)}</div>`;
   });
   document.getElementById('results').innerHTML = result;
 }
