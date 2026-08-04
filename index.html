@@ -28,7 +28,51 @@
 Race: <input id="raceId" value="MR" placeholder="MR">
 No: <input id="raceNo" value="7" type="number">
 <button class="btn-blue" onclick="toggleTheme()">🌙</button><br><br>
-<button onclick="fetchRace()">GET HORSES</button>
+<h3>Step 1: Get Data from OZbet</h3>
+<p>1. Open OZbet race page 2. Ctrl+A > Ctrl+C 3. Paste below</p>
+<textarea id="ozbetPaste" rows="10" style="width:100%"></textarea>
+<button onclick="parseData()">PARSE & RANK HORSES</button>
+
+<script>
+function parseData(){
+  let text = document.getElementById('ozbetPaste').value;
+
+  // This finds lines like: "1. HORSE NAME 5.00 58.5kg"
+  let lines = text.split('\n');
+  let horses = [];
+
+  lines.forEach(line => {
+    let match = line.match(/(\d+)\.\s+([A-Z\s]+)\s+([\d\.]+)\s+([\d\.]+)kg/);
+    if(match){
+      horses.push({
+        number: match[1],
+        name: match[2].trim(),
+        odds: parseFloat(match[3]),
+        weight: parseFloat(match[4])
+      });
+    }
+  });
+
+  // Now rank them
+  rankHorses(horses);
+}
+
+function rankHorses(horses){
+  // Simple ranking: Lower odds + Lower weight = Better score
+  horses.forEach(h => {
+    h.score = (1/h.odds * 100) + (60 - h.weight);
+  });
+  horses.sort((a,b) => b.score - a.score);
+
+  let result = '<h3>Ranked Horses</h3>';
+  horses.forEach((h,i) => {
+    result += `${i+1}. #${h.number} ${h.name} - Score: ${h.score.toFixed(2)}<br>`;
+  });
+  document.getElementById('results').innerHTML = result;
+}
+</script>
+
+<div id="results"></div>
 <button class="btn-blue" onclick="saveRace()">SAVE</button>
 <button class="btn-red" onclick="clearAll()">CLEAR</button>
 <div id="status"></div>
