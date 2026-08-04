@@ -9,25 +9,19 @@ td,th{border:1px solid #444; padding:6px; text-align:left}
 th{background:#222}</style>
 </head>
 <body>
-<h2>Tabtouch Race Fetcher</h2>
+<h2>Tabtouch Race Fetcher - No Login</h2>
 <input id="race" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/6">
-<input id="user" placeholder="Tabtouch Username">
-<input id="pass" type="password" placeholder="Tabtouch Password">
 <button onclick="fetchRace()">FETCH RACE</button>
 <div id="status"></div><div id="results"></div>
 <script>
-const API_URL = "https://tabtouch-api.onrender.com"; // <-- PASTE YOUR RENDER LINK HERE
+const API_URL = "https://tabtouch-api.onrender.com";
 
 async function fetchRace(){
-  document.getElementById('status').innerText = "Logging in to Tabtouch...";
+  document.getElementById('status').innerText = "Fetching race data...";
   let res = await fetch(API_URL + '/api/tabtouch', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      url: document.getElementById('race').value,
-      username: document.getElementById('user').value,
-      password: document.getElementById('pass').value
-    })
+    body: JSON.stringify({ url: document.getElementById('race').value })
   });
   let data = await res.json();
   if(data.ok){
