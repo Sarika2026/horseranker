@@ -16,10 +16,10 @@ th{background:#222}</style>
 <button onclick="fetchRace()">FETCH RACE</button>
 <div id="status"></div><div id="results"></div>
 <script>
-const API_URL = "https://tabtouch-api.onrender.com"; // <-- CHANGE THIS
+const API_URL = "https://tabtouch-api.onrender.com"; // <-- PASTE YOUR RENDER LINK HERE
 
 async function fetchRace(){
-  document.getElementById('status').innerText = "Fetching...";
+  document.getElementById('status').innerText = "Logging in to Tabtouch...";
   let res = await fetch(API_URL + '/api/tabtouch', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -31,7 +31,7 @@ async function fetchRace(){
   });
   let data = await res.json();
   if(data.ok){
-    document.getElementById('status').innerText = "Done";
+    document.getElementById('status').innerText = "Done: Found " + data.horses.length + " runners";
     let table = `<table><tr><th>No</th><th>Horse</th><th>Jockey</th><th>Barrier</th><th>Odds</th></tr>`;
     data.horses.forEach(h => {
       table += `<tr><td>${h.J}</td><td>${h.K}</td><td>${h.L}</td><td>${h.N}</td><td>${h.M}</td></tr>`;
