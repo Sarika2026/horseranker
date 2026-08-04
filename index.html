@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>HorseRanker V4 - Tabtouch</title>
+<title>HorseRanker V4 - Tabtouch Table</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body {font-family: Arial; padding: 20px; background:#0a0a0a; color:#fff;}
   input, button {padding:12px; margin:10px 0; background:#222; color:#fff; border:1px solid #555; border-radius:5px;}
   button {background:#00ff88; color:#000; font-weight:bold; cursor:pointer; font-size:16px;}
-.horse {padding:12px; border-bottom:1px solid #333; margin-bottom:5px; border-radius:5px;}
-.top1 {background:#1a331a; border-left:5px solid gold;}
-.top2 {background:#1a2a33; border-left:5px solid silver;}
-.top3 {background:#332a1a; border-left:5px solid #cd7f32;}
+  table {width:100%; border-collapse: collapse; margin-top:20px; background:#111;}
+  th, td {border:1px solid #333; padding:10px; text-align:center;}
+  th {background:#00ff88; color:#000; font-weight:bold;}
+ .rank1 {background:#1a331a;} /* Green for #1 */
+ .rank2 {background:#1a2a33;} /* Blue for #2 */
+ .rank3 {background:#332a1a;} /* Brown for #3 */
 </style>
 </head>
 <body>
-<h1>🏇 HorseRanker V4 - Tabtouch</h1>
+<h1>🏇 HorseRanker V4 - Excel Style</h1>
 <p>1. Download Excel from Tabtouch > 2. Upload below</p>
 <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
 <br>
@@ -42,10 +44,9 @@ function rankHorses(rows){
   let horses = [];
 
   rows.forEach((row, index) => {
-    // Skip scratched
     if(String(row.scratched).toUpperCase() === "TRUE") return;
-    
-    let number = row.number || (index + 1); // use row number if blank
+
+    let number = row.number || (index + 1);
     let name = row.starterName;
     let jockey = row.staterName2 || '';
     let odds = parseFloat(row.winDiv) || 99;
@@ -53,33 +54,41 @@ function rankHorses(rows){
     let barrier = parseInt(row.barrier) || 99;
 
     if(name && name.trim()!== ""){
-      horses.push({number, name, jockey, odds, weight, barrier});
+      let oddsScore = (1/odds) * 100;
+      let weightScore = (62 - weight) * 2;
+      let barrierScore = (barrier >=1 && barrier <=10)? (11 - barrier) * 2 : 0;
+      let score = oddsScore + weightScore + barrierScore;
+      horses.push({rank:0, number, name, jockey, odds, weight, barrier, score});
     }
   });
 
-  if(horses.length === 0){
-    document.getElementById('results').innerHTML = "No horses found. Check if file has data.";
-    return;
-  }
-
-  // Ranking: Odds 50% + Weight 30% + Barrier 20%
-  horses.forEach(h => {
-    let oddsScore = (1/h.odds) * 100;
-    let weightScore = (62 - h.weight) * 2;
-    let barrierScore = (h.barrier >=1 && h.barrier <=10)? (11 - h.barrier) * 2 : 0;
-    h.score = oddsScore + weightScore + barrierScore;
-  });
   horses.sort((a,b) => b.score - a.score);
+  horses.forEach((h,i) => h.rank = i+1);
 
-  let result = '<h3>🏆 TOP PICKS</h3>';
-  horses.forEach((h,i) => {
-    let topClass = i===0? 'top1' : i===1? 'top2' : i===2? 'top3' : '';
-    result += `<div class="horse ${topClass}">
-      <b>${i+1}. #${h.number} ${h.name}</b><br>
-      Jockey: ${h.jockey} | Odds: $${h.odds} | Weight: ${h.weight}kg | Barrier: ${h.barrier} | <b>Score: ${h.score.toFixed(2)}</b>
-    </div>`;
+  // Build Excel-like table
+  let table = `<h3>🏆 RANKED RESULTS - LIKE SHEET1</h3>
+  <table>
+    <tr>
+      <th>Rank</th><th>No</th><th>Horse</th><th>Jockey</th>
+      <th>Odds</th><th>Weight</th><th>Barrier</th><th>Score</th>
+    </tr>`;
+
+  horses.forEach(h => {
+    let rowClass = h.rank===1? 'rank1' : h.rank===2? 'rank2' : h.rank===3? 'rank3' : '';
+    table += `<tr class="${rowClass}">
+      <td><b>${h.rank}</b></td>
+      <td>${h.number}</td>
+      <td>${h.name}</td>
+      <td>${h.jockey}</td>
+      <td>$${h.odds}</td>
+      <td>${h.weight}kg</td>
+      <td>${h.barrier}</td>
+      <td><b>${h.score.toFixed(2)}</b></td>
+    </tr>`;
   });
-  document.getElementById('results').innerHTML = result;
+  table += `</table>`;
+
+  document.getElementById('results').innerHTML = table;
 }
 </script>
 </body>
