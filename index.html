@@ -1,40 +1,150 @@
 <!DOCTYPE html>
-<html>
-<head><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tabtouch Fetcher</title>
-<style>body{font-family:Arial; padding:10px; background:#111; color:#eee}
-input,button{padding:10px; margin:5px; width:95%; font-size:16px}
-table{width:100%; border-collapse:collapse; margin-top:10px}
-td,th{border:1px solid #444; padding:6px; text-align:left}
-th{background:#222}</style>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tabtouch Race Fetcher</title>
+<style>
+  body { font-family: Arial; padding: 15px; background: #0a0a0a; color: #eee; }
+  h2 { color: #4CAF50; }
+  input, button { padding: 12px; margin: 8px 0; width: 100%; font-size: 16px; border-radius: 6px; border: none; }
+  input { background: #222; color: #eee; }
+  button { background: #4CAF50; color: white; font-weight: bold; cursor: pointer; }
+  button.secondary { background: #2196F3; }
+  button.danger { background: #f44336; }
+  button:disabled { background: #555; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+  th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+  th { background: #1a1a1a; color: #4CAF50; }
+  #status { margin-top: 10px; color: #ffcc00; }
+ .btn-row { display: flex; gap: 10px; }
+</style>
 </head>
 <body>
-<h2>Tabtouch Race Fetcher - No Login</h2>
-<input id="race" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/6">
-<button onclick="fetchRace()">FETCH RACE</button>
-<div id="status"></div><div id="results"></div>
+<h2>Tabtouch Race Fetcher</h2>
+
+<label>Race URL:</label>
+<input id="race" type="text" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/6">
+
+<button id="btn" onclick="fetchRace()">FETCH RACE</button>
+
+<div class="btn-row" id="downloadBtns" style="display:none;">
+  <button class="secondary" onclick="runLogic()">RUN LOGIC</button>
+  <button class="secondary" onclick="downloadCSV()">CSV</button>
+  <button class="secondary" onclick="downloadTXT()">TXT</button>
+</div>
+<button class="danger" onclick="clearData()">CLEAR SAVED DATA</button>
+
+<div id="status"></div>
+<div id="results"></div>
+
 <script>
 const API_URL = "https://tabtouch-api.onrender.com";
+let raceData = []; 
+
+// AUTO-LOAD when page opens
+window.onload = function(){
+  let saved = localStorage.getItem("tabtouchRace");
+  if(saved){
+    raceData = JSON.parse(saved);
+    document.getElementById('status').innerText = "Loaded saved race: " + raceData.length + " runners";
+    document.getElementById('downloadBtns').style.display = "flex";
+    showTable();
+  }
+}
 
 async function fetchRace(){
-  document.getElementById('status').innerText = "Fetching race data...";
-  let res = await fetch(API_URL + '/api/tabtouch', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ url: document.getElementById('race').value })
-  });
-  let data = await res.json();
-  if(data.ok){
-    document.getElementById('status').innerText = "Done: Found " + data.horses.length + " runners";
-    let table = `<table><tr><th>No</th><th>Horse</th><th>Jockey</th><th>Barrier</th><th>Odds</th></tr>`;
-    data.horses.forEach(h => {
-      table += `<tr><td>${h.J}</td><td>${h.K}</td><td>${h.L}</td><td>${h.N}</td><td>${h.M}</td></tr>`;
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  btn.innerText = "FETCHING...";
+  document.getElementById('status').innerText = "Fetching race data... This takes 30-50s first time";
+  
+  try {
+    let res = await fetch(API_URL + '/api/tabtouch', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ url: document.getElementById('race').value })
     });
-    table += `</table>`;
-    document.getElementById('results').innerHTML = table;
-  } else {
-    document.getElementById('status').innerText = "Error: " + data.error;
+    let data = await res.json();
+    
+    if(data.ok){
+      raceData = data.horses;
+      saveData(); // SAVE TO PHONE
+      document.getElementById('status').innerText = "Done: Found " + raceData.length + " runners. Saved.";
+      document.getElementById('downloadBtns').style.display = "flex";
+      showTable();
+    } else {
+      document.getElementById('status').innerText = "Error: " + data.error;
+    }
+  } catch(e) {
+    document.getElementById('status').innerText = "Error: Could not connect to API";
   }
+  
+  btn.disabled = false;
+  btn.innerText = "FETCH RACE";
+}
+
+function runLogic(){
+  if(raceData.length === 0){ alert("Fetch race first"); return; }
+  
+  // EXAMPLE LOGIC: Score = 10 - Barrier
+  raceData.forEach(h => {
+    let barrier = parseInt(h.N) || 20;
+    h.Score = 10 - barrier; 
+  });
+  raceData.sort((a,b) => b.Score - a.Score);
+  saveData(); // SAVE AFTER LOGIC
+  showTable();
+}
+
+function showTable(){
+  let table = `<table><tr><th>Rank</th><th>No</th><th>Horse</th><th>Jockey</th><th>Barrier</th><th>Score</th><th>Odds</th></tr>`;
+  raceData.forEach((h,i) => {
+    table += `<tr><td>${i+1}</td><td>${h.J}</td><td>${h.K}</td><td>${h.L}</td><td>${h.N}</td><td><b>${h.Score || '-'}</b></td><td>${h.M}</td></tr>`;
+  });
+  table += `</table>`;
+  document.getElementById('results').innerHTML = table;
+}
+
+function saveData(){
+  localStorage.setItem("tabtouchRace", JSON.stringify(raceData));
+}
+
+function clearData(){
+  localStorage.removeItem("tabtouchRace");
+  raceData = [];
+  document.getElementById('results').innerHTML = "";
+  document.getElementById('downloadBtns').style.display = "none";
+  document.getElementById('status').innerText = "Data cleared";
+}
+
+function downloadCSV(){
+  let csv = "Rank,No,Horse,Jockey,Barrier,Score,Odds\n";
+  raceData.forEach((h,i) => {
+    csv += `${i+1},${h.J},"${h.K}","${h.L}",${h.N},${h.Score || '-'},${h.M}\n`;
+  });
+  downloadFile(csv, "race.csv", "text/csv");
+}
+
+function downloadTXT(){
+  let txt = "Rank | No | Horse | Jockey | Barrier | Score | Odds\n";
+  txt += "--------------------------------------------------\n";
+  raceData.forEach((h,i) => {
+    txt += `${i+1} | ${h.J} | ${h.K} | ${h.L} | ${h.N} | ${h.Score || '-'} | ${h.M}\n`;
+  });
+  downloadFile(txt, "race.txt", "text/plain");
+}
+
+function downloadFile(content, filename, type){
+  const blob = new Blob([content], { type: type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>
