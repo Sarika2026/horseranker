@@ -53,8 +53,8 @@ async function fetchRace(){
   let dateStr = dd > 13? `${dd}.${mm}.${yyyy}` : `${mm}.${dd}.${yyyy}`;
 
   // GITHUB CAN FETCH OZBET DIRECT - NO PROXY NEEDED
-  let url = `https://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${dateStr}&p_fixture_id=${raceId}&p_contest_number=${raceNo}`;
-
+  let ozbetUrl = `https://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${dateStr}&p_fixture_id=${raceId}&p_contest_number=${raceNo}`;
+   let url = `https://api.allorigins.win/raw?url=` + encodeURIComponent(ozbetUrl);
   document.getElementById('status').innerText = "Fetching " + raceKey + "...";
 
   try{
