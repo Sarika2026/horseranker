@@ -2,134 +2,167 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sheet1 - Tabtouch Ranker</title>
+<title>Sheet1 - Tabtouch Ranker CSV</title>
 <style>
-  body{font-family:Arial;margin:5px;background:#eee;font-size:12px}
- .btn{padding:8px 12px;background:#007bff;color:#fff;border:0;border-radius:4px;font-size:14px;margin-right:5px}
- .btn.green{background:#28a745}
- .btn.orange{background:#fd7e14}
- .header{background:#fff;padding:8px;border-radius:4px;margin:8px 0;font-weight:bold}
-  table{width:100%;border-collapse:collapse;background:#fff;margin-top:5px;font-size:11px}
-  td,th{border:1px solid #ddd;padding:4px;text-align:center;white-space:nowrap;cursor:pointer}
-  th{background:#f1f1f1}
- .colA{width:30px;font-weight:bold}
- .colD{text-align:left;padding-left:5px}
-  input{width:95%;padding:5px;margin-bottom:8px;border:1px solid #ccc;border-radius:4px}
+  body{font-family:Arial;margin:5px;background:#eee;font-size:11px}
+.btn{padding:8px 12px;background:#007bff;color:#fff;border:0;border-radius:4px;font-size:14px;margin-right:5px;margin-bottom:5px;cursor:pointer}
+.btn.green{background:#28a745}
+.btn.orange{background:#fd7e14}
+.btn.red{background:#dc3545}
+.header{background:#fff;padding:8px;border-radius:4px;margin:8px 0;font-weight:bold}
+.info{background:#fff;padding:6px;border-radius:4px;margin:8px 0;font-size:13px;font-weight:bold}
+.info span{margin-right:15px;color:#007bff}
+  table{width:100%;border-collapse:collapse;background:#fff;margin-top:5px;font-size:10px;overflow-x:auto;display:block}
+  td,th{border:1px solid #ddd;padding:3px;text-align:center;white-space:nowrap;cursor:pointer;min-width:45px}
+  th{background:#f1f1f1;position:sticky;top:0;z-index:1}
+.colA{width:30px;font-weight:bold}
+.colD{text-align:left;padding-left:5px;min-width:120px}
+.qcol{background:#f9f9f9}
+.qtf-col{font-weight:bold}
+  input[type=file]{margin-bottom:8px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<input id="url" placeholder="Paste Tabtouch Race URL here" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/1">
+<input type="file" id="csvFile" accept=".csv">
 
-<button class="btn" onclick="loadData()">🔄 Refresh</button>
-<button class="btn green" onclick="rankHorses()">🏆 Rank Horses</button>
-<button class="btn orange" onclick="downloadExcel()">📥 Download Excel</button>
+<button class="btn" onclick="loadCSV()">Update</button>
+<button class="btn green" onclick="sortHorses()">Sort</button>
+<button class="btn orange" onclick="downloadExcel()">Download Excel</button>
+<button class="btn red" onclick="newRace()">New</button>
 
+<div id="info" class="info">
+  <span id="raceName">Race: -</span>
+  <span id="starts">Starts: -</span>
+  <span id="divis">Divis: -</span>
+</div>
 <div id="head" class="header">Q5: - Q4: - Q20: -</div>
-<div id="tbl">Click Refresh to load data</div>
+<div id="tbl">Select CSV file and click Update</div>
 
 <script>
 let currentData = [];
-let sortCol = -1;
-let sortAsc = true;
+let raceInfo = {};
 
-// DEMO DATA - Replace this with API call later
-const DEMO = {
-  runners: [
-    {number:1,name:"Fast Horse",odds:3.50,jockey:"J Smith",barrier:4},
-    {number:2,name:"Slow Runner",odds:26.00,jockey:"A Lee",barrier:2},
-    {number:3,name:"Mid One",odds:8.00,jockey:"K Brown",barrier:7},
-    {number:4,name:"Long Shot",odds:45.00,jockey:"M Davis",barrier:1},
-    {number:5,name:"Fav",odds:2.20,jockey:"P Jones",barrier:3},
-  ]
+function getQtColor(val){
+  val = parseFloat(val) || 0;
+  if(val < 20) return "#0f0";
+  if(val < 50) return "#92D050";
+  if(val < 100) return "#FFC000";
+  if(val < 200) return "#f00";
+  return "#FF9966";
+}
+function getTfColor(val){
+  val = parseFloat(val) || 0;
+  if(val < 300) return "#0f0";
+  if(val < 800) return "#92D050";
+  if(val < 1500) return "#FFC000";
+  return "#f00";
 }
 
-function processRace(data, raceId) {
-    let horses = [...data.runners].sort((a,b) => a.number - b.number);
-    const noHorses = horses.length;
-    let e = 0, d = 0;
-    horses.forEach(h => {
-        if(h.odds > 1.1 && h.odds < 23.25) e++;
-        if(h.odds >= 23.25 && h.odds <= 66.66) d++;
-    });
-    
-    let rows = horses.map((h, i) => {
-        let A = i + 1; let D = h.name || "";
-        let K = parseFloat(h.odds) || 0;
-        let P = " "; // Will calculate after 2nd refresh
-        let H = K; 
-        let color = i === 0? 4 : i <= 5? 35 : i <= 7? 38 : i === 8? 39 : i <= 12? 46 : 0;
-        return { A, D, J: h.number, K, L: h.jockey, N: h.barrier, H, P, color, rank: A }
-    });
-    
-    let Q5 = e + " + " + d;
-    let fication = (e+d)<=8.1?"X":(e+d)>=10&&(e+d)<=12.1&&e<=8.9?"A":(e+d)>=10&&(e+d)<=12.1&&e>=9?"B":(e+d)>=13&&e<=8.9?"D":(e+d)>=13&&(e+d)<=14.1&&e>=9?"E":(e+d)>=15&&e>=9?"H":"";
-    let yyy = "no"; if((e+d)>=10&&(e+d)<=12.1&&noHorses>=14) yyy="B14/BE YES "; if((e+d)>=13&&(e+d)<=20.1&&e===5) yyy="yes D5"; if((e+d)>=15&&e>=9) yyy="H YES";
-    let yyyColor = yyy.includes("YES")?4:yyy.includes("no")?0:26;
-    return {rows, Q5, Q4:fication, Q20:yyy, Q20Color:yyyColor};
+function loadCSV(){
+  const file = document.getElementById('csvFile').files[0];
+  if(!file){ alert("Select a CSV file first"); return; }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const lines = e.target.result.split('\n');
+    const headers = lines[0].split(',');
+    let horses = [];
+
+    for(let i=1; i<lines.length; i++){
+      if(!lines[i]) continue;
+      const values = lines[i].split(',');
+      let obj = {};
+      headers.forEach((h, idx) => obj[h.trim()] = values[idx]?.trim());
+      horses.push(obj);
+    }
+
+    raceInfo = {raceName: horses[0].raceName, starts: horses[0].starts, divis: horses[0].divis};
+    processAndRender(horses);
+  }
+  reader.readAsText(file);
+}
+
+function processAndRender(horses){
+  const noHorses = horses.length;
+  let e = 0, d = 0;
+  horses.forEach(h => {
+    let odds = parseFloat(h.odds);
+    if(odds > 1.1 && odds < 23.25) e++;
+    if(odds >= 23.25 && odds <= 66.66) d++;
+  });
+
+  let rows = horses.map((h, i) => {
+    let win = parseFloat(h.win), qt = parseFloat(h.qt), tf = parseFloat(h.tf);
+    return {
+      rank: i+1, A: i+1, D: h.name, J: h.number, K: h.odds, L: h.jockey, N: h.barrier,
+      H: h.odds, P: " ", color: i === 0? 4 : i <= 5? 35 : 0,
+      Q1:h.q1,Q2:h.q2,Q3:h.q3,Q4:h.q4,Q5:h.q5,Q6:h.q6,Q7:h.q7,
+      Q8:win, Q9:qt, Q10:tf,
+      Q8Color:getQtColor(win), Q9Color:getQtColor(qt), Q10Color:getTfColor(tf),
+      R1:h.r1,R2:h.r2,R3:h.r3,R4:h.r4,R5:h.r5,R6:h.r6,R7:h.r7,R8:h.r8,R9:h.r9,R10:h.r10
+    }
+  });
+
+  let Q5 = e + " + " + d;
+  let fication = (e+d)<=8.1?"X":(e+d)>=10&&(e+d)<=12.1&&e<=8.9?"A":"B";
+  let yyy = "no";
+  let yyyColor = 0;
+
+  render({rows, Q5, Q4:fication, Q20:yyy, Q20Color:yyyColor});
 }
 
 function render(data){
   currentData = data.rows;
-  document.getElementById("head").innerHTML = 
-    '<b>Q5:</b>'+data.Q5+' <b>Q4:</b>'+data.Q4+' <b>Q20:</b><span style="background:'+getC(data.Q20Color)+';padding:2px 4px">'+data.Q20+'</span>';
-  
-  let h="<table><tr>"+
-    th("Rank","rank")+th("A","A")+th("Horse","D")+th("No","J")+th("Odds","K")+th("H","H")+th("Barrier","N")+th("P%","P")+
-    "</tr>";
-  
+  document.getElementById("raceName").innerHTML = '<b>Race:</b> ' + raceInfo.raceName;
+  document.getElementById("starts").innerHTML = '<b>Starts:</b> ' + raceInfo.starts;
+  document.getElementById("divis").innerHTML = '<b>Divis:</b> ' + raceInfo.divis;
+  document.getElementById("head").innerHTML = '<b>Q5:</b>'+data.Q5+' <b>Q4:</b>'+data.Q4+' <b>Q20:</b><span style="background:'+getC(data.Q20Color)+';padding:2px 4px">'+data.Q20+'</span>';
+
+  let headers = "Rank,A,Horse,No,Odds,H,Barrier,P%,";
+  for(let q=1; q<=10; q++) headers += "Q"+q+",";
+  for(let r=1; r<=10; r++) headers += "R"+r+",";
+
+  let h="<table><tr>"+headers.split(',').map(x=>'<th>'+x+'</th>').join('')+"</tr>";
+
   currentData.forEach((x)=>{
     let bg=getC(x.color);
-    h+='<tr style="background:'+bg+'"><td>'+x.rank+'</td><td class=colA>'+x.A+'</td><td class=colD>'+x.D+'</td><td>'+x.J+'</td><td>'+x.K+'</td><td>'+x.H+'</td><td>'+x.N+'</td><td>'+x.P+'%</td></tr>'
+    let row = `<td>${x.rank}</td><td class=colA>${x.A}</td><td class=colD>${x.D}</td><td>${x.J}</td><td>${x.K}</td><td>${x.H}</td><td>${x.N}</td><td>${x.P}%</td>`;
+    for(let q=1; q<=10; q++){
+      let qColor = q>=8 && q<=10? `style="background:${x['Q'+q+'Color']};color:#000"` : "";
+      row += `<td class="qcol qtf-col" ${qColor}>${x['Q'+q]||""}</td>`;
+    }
+    for(let r=1; r<=10; r++) row += `<td class=qcol>${x['R'+r]||""}</td>`;
+    h+='<tr style="background:'+bg+'">'+row+'</tr>'
   });
   document.getElementById("tbl").innerHTML=h+"</table>";
 }
 
-function th(name, key){
-  return '<th onclick="sortTable(\''+key+'\')">'+name+' ↕</th>'
-}
-
-function sortTable(key){
-  if(sortCol === key) sortAsc =!sortAsc; else sortAsc = true;
-  sortCol = key;
-  currentData.sort((a,b)=>{
-    if(a[key] < b[key]) return sortAsc? -1 : 1;
-    if(a[key] > b[key]) return sortAsc? 1 : -1;
-    return 0;
-  });
-  render({rows:currentData, Q5:"", Q4:"", Q20:"", Q20Color:0});
-}
-
-function rankHorses(){
-  currentData.sort((a,b)=>a.K - b.K); // Rank by lowest odds = Fav
+function sortHorses(){
+  currentData.sort((a,b)=>a.K - b.K);
   currentData.forEach((x,i)=>x.rank = i+1);
   render({rows:currentData, Q5:"", Q4:"", Q20:"", Q20Color:0});
 }
 
 function downloadExcel(){
-  const ws = XLSX.utils.json_to_sheet(currentData.map(x=>({
-    Rank:x.rank, A:x.A, Horse:x.D, No:x.J, Odds:x.K, H:x.H, Barrier:x.N, "P%":x.P
-  })));
+  const ws = XLSX.utils.json_to_sheet(currentData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  XLSX.writeFile(wb, "Sheet1_Ranked.xlsx");
+  XLSX.writeFile(wb, raceInfo.raceName + ".xlsx");
+}
+
+function newRace(){
+  document.getElementById("csvFile").value = "";
+  document.getElementById("tbl").innerHTML = "Select CSV file and click Update";
+  document.getElementById("head").innerHTML = "Q5: - Q4: - Q20: -";
+  document.getElementById("raceName").innerHTML = "Race: -";
+  document.getElementById("starts").innerHTML = "Starts: -";
+  document.getElementById("divis").innerHTML = "Divis: -";
+  currentData = [];
 }
 
 function getC(i){return {4:"#0f0",35:"#92D050",38:"#FFC000",39:"#f00",46:"#FF9966",26:"#FFD700",0:"#fff"}[i]||"#fff"}
-
-function loadData(){
-  document.getElementById("tbl").innerHTML="Loading Demo...";
-  setTimeout(()=>{
-    let url = document.getElementById("url").value;
-    let raceId = url.split("/").slice(-2).join("_");
-    let data = processRace(DEMO, raceId);
-    render(data);
-  }, 500);
-}
-
-// Auto load
-loadData();
 </script>
 </body>
 </html>
