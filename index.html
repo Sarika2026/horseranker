@@ -1,174 +1,124 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tabtouch Race Sheet</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ozbet 2-Min Calc</title>
 <style>
-body{font-family:Arial;margin:3px;background:#eee;font-size:10px}
-.btn{padding:6px 10px;background:#007bff;color:#fff;border:0;border-radius:4px;margin:2px;cursor:pointer;font-size:11px}
-.header{background:#fff;padding:6px;border-radius:4px;margin:6px 0;font-weight:bold;font-size:11px}
-.info{background:#fff;padding:5px;border-radius:4px;margin:6px 0;font-size:11px;display:flex;flex-wrap:wrap}
-.info span{margin-right:12px;white-space:nowrap}
-table{width:100%;border-collapse:collapse;background:#fff;margin-top:5px;font-size:9px;display:block;overflow-x:auto;white-space:nowrap}
-td,th{border:1px solid #ccc;padding:2px 3px;text-align:center;min-width:45px}
-th{background:#f1f1f1;position:sticky;top:0}
+    body { font-family: Arial; background:#0a0a0a; color:#eee; padding:10px; max-width:600px; margin:auto; }
+    input, button { padding:10px; margin:5px 2px; font-size:16px; border-radius:6px; border:1px solid #444; background:#1a1a1a; color:#eee; }
+    button { background:#28a745; border:none; font-weight:bold; width:100%; }
+    table { width:100%; border-collapse:collapse; margin-top:15px; font-size:13px; }
+    th, td { border:1px solid #333; padding:5px; text-align:center; }
+    th { background:#1a1a1a; position:sticky; top:0; }
+   .q5 { background:#003300; } /* Green Top 5 */
+   .gapbig { color:#ff3333; font-weight:bold; } /* Big Gap */
+   pre { background:#000; padding:8px; overflow-x:auto; font-size:11px; max-height:200px; }
+    #status { margin-top:10px; color:#ffcc00; font-weight:bold; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<input type="file" id="csvFile" accept=".txt,.csv">
-<button class="btn" onclick="loadFile()">Pick File</button>
-<button class="btn" style="background:#17a2b8" onclick="loadUploaded()">Load Uploaded File</button>
-<button class="btn" style="background:#28a745" onclick="sortHorses()">Sort</button>
-<button class="btn" style="background:#fd7e14" onclick="downloadExcel()">Download Excel</button>
-<button class="btn" style="background:#dc3545" onclick="newRace()">New</button>
+<h2>Ozbet Race Calc</h2>
+<input type="text" id="race" placeholder="Race Name" value="BUNBURY">
+<input type="number" id="rno" placeholder="R" value="1" style="width:70px">
+<input type="text" id="date" placeholder="YYYYMMDD" value="20250805">
+<button onclick="getResults()">GET RESULTS</button>
 
-<div id="info" class="info">
-  <span id="raceName">Race: -</span><span id="date">Date: -</span><span id="going">Going: -</span>
-  <span id="weather">Weather: -</span><span id="distance">Dist: -</span><span id="class">Class: -</span>
-  <span id="starts">Starts: -</span><span id="divis">Divis: -</span><span id="bettingTime">BetTime: -</span>
-</div>
-<div id="head" class="header">Load file to start</div>
-<div id="tbl">Select.csv/.txt and click Update</div>
+<div id="status">Enter Race and Tap Button</div>
+
+<h3>Raw Data</h3>
+<pre id="raw">Waiting...</pre>
+
+<h3>Result Table</h3>
+<div id="output"></div>
 
 <script>
-let sheet2Data = [];
-let sheet1Data = [];
-let raceInfo = {};
-let oldHorse = [];
+const PROXIES = [
+    "https://api.allorigins.win/raw?url=",
+    "https://corsproxy.io/?",
+    "https://api.codetabs.com/v1/proxy?quest="
+];
 
-function getC(i){return {4:"#0f0",35:"#92D050",38:"#FFC000",39:"#f00",46:"#FF9966",28:"#FFA500",0:"#fff"}[i]||"#fff"}
-function getQtColor(v){v=parseFloat(v)||0; if(v<20)return"#0f0"; if(v<50)return"#92D050"; if(v<100)return"#FFC000"; if(v<200)return"#f00"; return"#FF9966"}
-function getTfColor(v){v=parseFloat(v)||0; if(v<300)return"#0f0"; if(v<800)return"#92D050"; if(v<1500)return"#FFC000"; return"#f00"}
+async function getResults(){
+    let race = document.getElementById('race').value.toUpperCase().trim();
+    let rno = document.getElementById('rno').value;
+    let date = document.getElementById('date').value;
+    let status = document.getElementById('status');
+    let rawBox = document.getElementById('raw');
+    let output = document.getElementById('output');
+    output.innerHTML = ""; rawBox.innerText = "Fetching...";
 
-// HEADER MAP: handles Tabtouch, Ozbet, different exports
-function mapHeaders(h){
-  let map = {};
-  h.forEach((col,i)=>{
-    let c = col.toLowerCase().trim();
-    if(c.includes("horse")||c.includes("runner")||c.includes("name")) map.starterName=i;
-    else if(c.includes("number")||c=="#"||c=="no") map.number=i;
-    else if(c.includes("win")&&c.includes("div")) map.winDiv=i;
-    else if(c=="win") map.win=i;
-    else if(c=="qt"||c.includes("quartet")) map.qt=i;
-    else if(c=="tf"||c.includes("trifecta")) map.tf=i;
-    else if(c.includes("date")) map.raceDate=i;
-    else if(c.includes("course")||c.includes("track")) map.course=i;
-    else if(c.includes("race")&&c.includes("id")) map.raceID=i;
-    else if(c.includes("race")&&c.includes("no")) map.raceNo=i;
-    else if(c.includes("going")) map.going=i;
-    else if(c.includes("weather")) map.weather=i;
-    else if(c.includes("dist")) map.distance=i;
-    else if(c.includes("class")) map.class=i;
-    else if(c.includes("start")) map.starts=i;
-    else if(c.includes("divis")) map.divis=i;
-    else if(c.includes("bet1")) map.bet1=i;
-    else if(c.includes("betcolor")) map.betColor1=i;
-  });
-  return map;
-}
-
-function cleanTabtouchData(lines){
-  return lines.slice(3).map(r=>{ // VBA StartRow:=4
-    if(r[12]){ if(r[5]){ for(let i=6;i<=12;i++) r[i-2]=r[i]; } else{ for(let i=5;i<=12;i++) r[i-1]=r[i]; } } // GetFile column shift
-    return r;
-  }).filter(r=>r[0]);
-}
-
-function processRaceHeader(first){
-  let RaceTime = (first.starts||"").replace(/[.,]/g,':');
-  if(RaceTime.split(':').length===2) RaceTime+=":00";
-  let RaceDivi = first.divis||"";
-  let diffMins = "";
-  if(RaceTime && RaceDivi){ let t1 = new Date("2000-01-01T"+RaceTime); let t2 = new Date("2000-01-01T"+RaceDivi); diffMins = Math.round((t1-t2)/1000/60*100)/100 + " mins"; }
-  raceInfo = { raceName:`${first.raceID||''} ${first.raceNo||''} ${first.course||''}`, date:`on ${first.raceDate||''}`, going:first.going||'', weather:first.weather||'', distance:first.distance||'', class:first.class||'', starts:RaceTime, divis:RaceDivi, bettingTime:diffMins }
-  Object.keys(raceInfo).forEach(k=>{if(document.getElementById(k))document.getElementById(k).innerHTML='<b>'+k+':</b> '+raceInfo[k]});
-}
-
-function processHorses(data){
-  let e=0,d=0;
-  let sorted = [...data].sort((a,b)=>parseFloat(a.winDiv)-parseFloat(b.winDiv));
-  sheet1Data = sorted.map((h,x)=>{
-    let odds=parseFloat(h.winDiv)||999;
-    if(odds>0 && odds<=23.2) e++; if(odds>23.21 && odds<=66.66) d++;
-    let gapTxt="", colgap=-1;
-    if(x>0){ let r=((odds/parseFloat(sorted[x-1].winDiv))-1)*100; if(r>=75&&r<100){gapTxt="g";colgap=39;} else if(r<180){gapTxt="<gap>";colgap=28;} else if(r<400){gapTxt=">GAP<";colgap=42;} else{gapTxt="*GAP*";colgap=0;} }
-    let color= x===0?4:x<=5?35:x<=7?38:x===8?39:x<=12?46:x===13?39:x===14?38:0;
-    let no=parseInt(h.number)||x+1; let s2=sheet2Data[no-1]||[no,"",0,0,0];
-    return {...h,Fav:x+1,Order:no,Horse:h.starterName,No:no,Colour:gapTxt,Odds:odds.toFixed(2),cost:odds.toFixed(2),QUARTETS:s2[3],BetLabel:"",BetsInfo:"",BetColor:0,Q8:s2[2],Q9:s2[3],Q10:s2[4],Q8Color:getQtColor(s2[2]),Q9Color:getQtColor(s2[3]),Q10Color:getTfColor(s2[4]),_odds:odds,color:colgap>=0?colgap:color,pctChange:""};
-  });
-  let total=e+d; let fic=""; if(total<=8.1)fic="X"; if(total==9&&e>=5)fic="Q"; if(total>=10&&total<=12.1&&e<=8.9)fic="A"; if(total>=10&&total<=12.1&&e>=9)fic="B"; if(total>=13&&e<=8.9)fic="D"; if(total>=15&&e>=9)fic="H";
-  let yyy="no"; if(total>=10&&total<=12.1&&data.length==14)yyy="B14 YES"; if(total>=15&&e>=9)yyy="H YES";
-  let e1=parseFloat(sorted[0].winDiv); let verd=e1<=2.11?"SF OK":e1<=5.21?"OK Fav":e1>=5.62?"WF OK":"";
-  document.getElementById("head").innerHTML=`Q5:${e}+${d}/${data.length} | ${fic} | ${yyy} | ${verd}`;
-}
-
-function processBets(){
-  const labels=["Fav","2nd","3rd","4th","5th","6th","-7-","-8-","-9-","*10*","-11-","-12-","-13-","-14-","-15-"];
-  sheet1Data.forEach((h,i)=>{ h.BetLabel=labels[i]||""; let betStr=""; for(let b=1;b<=3;b++){ let bi=h['bet'+b]; if(bi){ let p=bi.split(',').map(n=>parseInt(n)||'?').join('.')+'.'; betStr+=p+" "; }} h.BetsInfo=betStr; h.BetColor=parseInt(h.betColor1)||0; });
-}
-
-function posSort(){
-  if(oldHorse.length===0){ oldHorse=sheet1Data.map(h=>({no:h.No,odds:parseFloat(h.Odds)})); return; }
-  sheet1Data.forEach(h=>{ let old=oldHorse.find(o=>o.no===h.No); if(old){ let pct=Math.floor((old.odds/parseFloat(h.Odds)-1)*100); h.pctChange=pct+"%"; } else{ h.pctChange="SCR"; } });
-  if(sheet1Data.length!==oldHorse.length){ document.getElementById("head").style.background="#f00"; document.getElementById("head").innerHTML+=" | LATE SCRATCHING"; }
-  oldHorse=sheet1Data.map(h=>({no:h.No,odds:parseFloat(h.Odds)}));
-}
-
-function processCSVLines(lines){
-  let headers=lines[0].split(',').map(h=>h.trim());
-  let map = mapHeaders(headers);
-  let raw=cleanTabtouchData(lines);
-  let data=raw.map(r=>{
-    return {
-      raceDate:r[map.raceDate], raceID:r[map.raceID], course:r[map.course], weather:r[map.weather], going:r[map.going],
-      raceNo:r[map.raceNo], distance:r[map.distance], class:r[map.class], starts:r[map.starts], divis:r[map.divis],
-      number:r[map.number], winDiv:r[map.winDiv], starterName:r[map.starterName],
-      win:r[map.win], qt:r[map.qt], tf:r[map.tf], bet1:r[map.bet1], betColor1:r[map.betColor1],
-    ...Object.fromEntries([...Array(10)].map((_,i)=>[`r${i+1}`,""])),
-    ...Object.fromEntries([...Array(10)].map((_,i)=>[`q${i+1}`,""]))
+    let ozbetURL = `http://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${date}&p_fixture_id=${race}&p_contest_number=${rno}`;
+    
+    let text = "";
+    for(let base of PROXIES){
+        try{
+            status.innerText = "Trying: " + base.split('/')[2];
+            let res = await fetch(base + encodeURIComponent(ozbetURL));
+            if(!res.ok) continue;
+            text = await res.text();
+            if(text.length > 20 && !text.includes("Error")) break; // got real data
+        }catch(e){}
     }
-  }).filter(d=>d.number);
 
-  if(data.length===0){ alert("No horse data found. Check headers: Number, Horse, WinDiv"); return; }
-
-  sheet2Data=data.map(d=>[parseInt(d.number),d.starterName,parseFloat(d.win)||0,parseFloat(d.qt)||0,parseFloat(d.tf)||0]);
-  processRaceHeader(data[0]);
-  processHorses(data);
-  processBets();
-  posSort();
-  render();
+    rawBox.innerText = text; // HOLD AND SHOW RAW
+    
+    if(text.length < 20){
+        status.innerText = "ERROR: No data. Check Race/Date or Internet. Proxy may be blocked.";
+        return;
+    }
+    
+    status.innerText = "Got data. Parsing...";
+    parseAndCalc(text);
 }
 
-function loadFile(){
-  const file=document.getElementById('csvFile').files[0]; if(!file){alert("Pick file first");return;}
-  const reader=new FileReader();
-  reader.onload=e=>{ let lines=e.target.result.split('\n').filter(r=>r.trim()!==""); processCSVLines(lines); }
-  reader.readAsText(file);
-}
+function parseAndCalc(rawText){
+    let lines = rawText.trim().split('\n');
+    let data = [];
+    let html = "<table><tr><th>Rk</th><th>Horse</th><th>Win</th><th>Place</th><th>Gap</th></tr>";
 
-function loadUploaded(){
-  fetch('/mnt/data.csv').then(r => r.text()).then(txt => { let lines = txt.split('\n').filter(r=>r.trim()!==""); processCSVLines(lines); })
- .catch(err => alert("Can't read uploaded file: " + err))
-}
+    lines.forEach(line => {
+        line = line.trim();
+        if(line == "" || line.toLowerCase().includes("no data")) return;
+        let cols = line.split(',');
+        if(cols.length >= 4){
+            data.push({
+                no: cols[0].trim(),
+                horse: cols[1].trim(),
+                win: parseFloat(cols[2]) || 999,
+                place: parseFloat(cols[3]) || 999
+            });
+        }
+    });
 
-function render(){
-  let headers="Fav,Order,Horse,No,Gap,Odds,Cost,Change,QUARTETS,Bet,Bets,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10".split(',');
-  let h="<table><tr>"+headers.map(x=>'<th>'+x+'</th>').join('')+"</tr>";
-  sheet1Data.forEach(x=>{
-    let row=`<td style="background:${getC(x.color)}">${x.Fav}</td><td>${x.Order}</td><td>${x.Horse}</td><td>${x.No}</td>`;
-    row+=`<td style="background:${getC(x.color)}">${x.Colour}</td><td>${x.Odds}</td><td>${x.cost}</td><td style="color:red">${x.pctChange}</td>`;
-    row+=`<td style="background:${x.Q9Color}">${x.QUARTETS}</td><td>${x.BetLabel}</td><td style="background:${getC(x.BetColor)}">${x.BetsInfo}</td>`;
-    for(let q=1;q<=10;q++)row+=`<td style="background:${x['Q'+q+'Color']||''}">${x['Q'+q]||''}</td>`;
-    h+='<tr>'+row+'</tr>';
-  });
-  document.getElementById("tbl").innerHTML=h+"</table>";
-}
+    if(data.length == 0){
+        document.getElementById('status').innerText = "ERROR: Parsed 0 runners. Raw data format may have changed.";
+        return;
+    }
 
-function sortHorses(){ sheet1Data.sort((a,b)=>a._odds-b._odds); posSort(); sheet1Data.forEach((x,i)=>x.Fav=i+1); render(); }
-function downloadExcel(){ const ws=XLSX.utils.json_to_sheet(sheet1Data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1"); XLSX.writeFile(wb,(raceInfo.raceName||"Race")+".xlsx"); }
-function newRace(){ document.getElementById("csvFile").value=""; document.getElementById("tbl").innerHTML="Select file and click Update"; oldHorse=[]; }
+    // CALC: Sort by Win Div Low to High
+    data.sort((a,b) => a.win - b.win);
+
+    data.forEach((d,i) => {
+        let gap = i>0? (d.win - data[i-1].win).toFixed(2) : "-";
+        let gapClass = parseFloat(gap) > 2.0 ? 'class="gapbig"' : ''; // Example: highlight big gaps
+        let rowClass = i < 5 ? 'class="q5"' : ''; // Top 5 = Q5
+        
+        html += `<tr ${rowClass}>
+            <td>${i+1}</td>
+            <td style="text-align:left">${d.no}. ${d.horse}</td>
+            <td>${d.win}</td>
+            <td>${d.place}</td>
+            <td ${gapClass}>${gap}</td>
+        </tr>`;
+    });
+    html += "</table>";
+
+    document.getElementById('output').innerHTML = html;
+    document.getElementById('status').innerText = `Done. Loaded ${data.length} runners. Green = Top 5 by Win`;
+}
 </script>
+
 </body>
 </html>
