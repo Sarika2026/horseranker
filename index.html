@@ -18,7 +18,8 @@ th{background:#f1f1f1;position:sticky;top:0}
 <body>
 
 <input type="file" id="csvFile" accept=".txt,.csv">
-<button class="btn" onclick="loadFile()">Update</button>
+<button class="btn" onclick="loadFile()">Pick File</button>
+<button class="btn" style="background:#17a2b8" onclick="loadUploaded()">Load Uploaded File</button>
 <button class="btn" style="background:#28a745" onclick="sortHorses()">Sort</button>
 <button class="btn" style="background:#fd7e14" onclick="downloadExcel()">Download Excel</button>
 <button class="btn" style="background:#dc3545" onclick="newRace()">New</button>
@@ -26,148 +27,147 @@ th{background:#f1f1f1;position:sticky;top:0}
 <div id="info" class="info">
   <span id="raceName">Race: -</span><span id="date">Date: -</span><span id="going">Going: -</span>
   <span id="weather">Weather: -</span><span id="distance">Dist: -</span><span id="class">Class: -</span>
-  <span id="starts">Starts: -</span><span id="divis">Divis: -</span><span id="betTime">BetTime: -</span>
+  <span id="starts">Starts: -</span><span id="divis">Divis: -</span><span id="bettingTime">BetTime: -</span>
 </div>
 <div id="head" class="header">Load file to start</div>
 <div id="tbl">Select.csv/.txt and click Update</div>
 
 <script>
-let sheet2Data = []; // A:H engine: number,name,win,qt,tf
-let sheet1Data = []; // display rows
+let sheet2Data = [];
+let sheet1Data = [];
 let raceInfo = {};
-let oldHorse = []; // for PosSort
+let oldHorse = [];
 
-// Color helpers
 function getC(i){return {4:"#0f0",35:"#92D050",38:"#FFC000",39:"#f00",46:"#FF9966",28:"#FFA500",0:"#fff"}[i]||"#fff"}
 function getQtColor(v){v=parseFloat(v)||0; if(v<20)return"#0f0"; if(v<50)return"#92D050"; if(v<100)return"#FFC000"; if(v<200)return"#f00"; return"#FF9966"}
 function getTfColor(v){v=parseFloat(v)||0; if(v<300)return"#0f0"; if(v<800)return"#92D050"; if(v<1500)return"#FFC000"; return"#f00"}
 
-// 1. GETFILE: Clean Tabtouch columns
+// HEADER MAP: handles Tabtouch, Ozbet, different exports
+function mapHeaders(h){
+  let map = {};
+  h.forEach((col,i)=>{
+    let c = col.toLowerCase().trim();
+    if(c.includes("horse")||c.includes("runner")||c.includes("name")) map.starterName=i;
+    else if(c.includes("number")||c=="#"||c=="no") map.number=i;
+    else if(c.includes("win")&&c.includes("div")) map.winDiv=i;
+    else if(c=="win") map.win=i;
+    else if(c=="qt"||c.includes("quartet")) map.qt=i;
+    else if(c=="tf"||c.includes("trifecta")) map.tf=i;
+    else if(c.includes("date")) map.raceDate=i;
+    else if(c.includes("course")||c.includes("track")) map.course=i;
+    else if(c.includes("race")&&c.includes("id")) map.raceID=i;
+    else if(c.includes("race")&&c.includes("no")) map.raceNo=i;
+    else if(c.includes("going")) map.going=i;
+    else if(c.includes("weather")) map.weather=i;
+    else if(c.includes("dist")) map.distance=i;
+    else if(c.includes("class")) map.class=i;
+    else if(c.includes("start")) map.starts=i;
+    else if(c.includes("divis")) map.divis=i;
+    else if(c.includes("bet1")) map.bet1=i;
+    else if(c.includes("betcolor")) map.betColor1=i;
+  });
+  return map;
+}
+
 function cleanTabtouchData(lines){
-  return lines.slice(3).map(r=>{ // StartRow:=4
-    if(r[12]){ // if Col M has data
-      if(r[5]){ for(let i=6;i<=12;i++) r[i-2]=r[i]; } // G:M -> E:K
-      else{ for(let i=5;i<=12;i++) r[i-1]=r[i]; } // F:M -> E:L
-    }
-    return r.slice(0,35); // B:M60
+  return lines.slice(3).map(r=>{ // VBA StartRow:=4
+    if(r[12]){ if(r[5]){ for(let i=6;i<=12;i++) r[i-2]=r[i]; } else{ for(let i=5;i<=12;i++) r[i-1]=r[i]; } } // GetFile column shift
+    return r;
   }).filter(r=>r[0]);
 }
 
-// 2. RACEINFO: Header
 function processRaceHeader(first){
   let RaceTime = (first.starts||"").replace(/[.,]/g,':');
   if(RaceTime.split(':').length===2) RaceTime+=":00";
   let RaceDivi = first.divis||"";
   let diffMins = "";
-  if(RaceTime && RaceDivi){
-    let t1 = new Date("2000-01-01T"+RaceTime);
-    let t2 = new Date("2000-01-01T"+RaceDivi);
-    diffMins = Math.round((t1-t2)/1000/60*100)/100 + " mins";
-  }
-  raceInfo = {
-    raceName:`${first.raceID||''} ${first.raceNo||''} ${first.course||''}`,
-    date:`on ${first.raceDate||''}`, going:first.going||'', weather:first.weather||'',
-    distance:first.distance||'', class:first.class||'', starts:RaceTime, divis:RaceDivi, bettingTime:diffMins
-  }
+  if(RaceTime && RaceDivi){ let t1 = new Date("2000-01-01T"+RaceTime); let t2 = new Date("2000-01-01T"+RaceDivi); diffMins = Math.round((t1-t2)/1000/60*100)/100 + " mins"; }
+  raceInfo = { raceName:`${first.raceID||''} ${first.raceNo||''} ${first.course||''}`, date:`on ${first.raceDate||''}`, going:first.going||'', weather:first.weather||'', distance:first.distance||'', class:first.class||'', starts:RaceTime, divis:RaceDivi, bettingTime:diffMins }
+  Object.keys(raceInfo).forEach(k=>{if(document.getElementById(k))document.getElementById(k).innerHTML='<b>'+k+':</b> '+raceInfo[k]});
 }
 
-// 3. HORSES: Gaps + Classification + Colors
 function processHorses(data){
   let e=0,d=0;
   let sorted = [...data].sort((a,b)=>parseFloat(a.winDiv)-parseFloat(b.winDiv));
-
   sheet1Data = sorted.map((h,x)=>{
     let odds=parseFloat(h.winDiv)||999;
     if(odds>0 && odds<=23.2) e++; if(odds>23.21 && odds<=66.66) d++;
-
     let gapTxt="", colgap=-1;
-    if(x>0){ let r=((odds/parseFloat(sorted[x-1].winDiv))-1)*100;
-      if(r>=75&&r<100){gapTxt="g";colgap=39;} else if(r<180){gapTxt="<gap>";colgap=28;}
-      else if(r<400){gapTxt=">GAP<";colgap=42;} else{gapTxt="*GAP*";colgap=0;}
-    }
+    if(x>0){ let r=((odds/parseFloat(sorted[x-1].winDiv))-1)*100; if(r>=75&&r<100){gapTxt="g";colgap=39;} else if(r<180){gapTxt="<gap>";colgap=28;} else if(r<400){gapTxt=">GAP<";colgap=42;} else{gapTxt="*GAP*";colgap=0;} }
     let color= x===0?4:x<=5?35:x<=7?38:x===8?39:x<=12?46:x===13?39:x===14?38:0;
-    let no=parseInt(h.number); let s2=sheet2Data[no-1]||[no,"",0,0,0];
-
-    return {...h,Fav:x+1,Order:no,Horse:h.starterName,No:no,Colour:gapTxt,Odds:odds,cost:odds,
-      QUARTETS:s2[3],BetLabel:"",BetsInfo:"",BetColor:0,Colour2:"",Q8:s2[2],Q9:s2[3],Q10:s2[4],
-      Q8Color:getQtColor(s2[2]),Q9Color:getQtColor(s2[3]),Q10Color:getTfColor(s2[4]),_odds:odds,color:colgap>=0?colgap:color,pctChange:""};
+    let no=parseInt(h.number)||x+1; let s2=sheet2Data[no-1]||[no,"",0,0,0];
+    return {...h,Fav:x+1,Order:no,Horse:h.starterName,No:no,Colour:gapTxt,Odds:odds.toFixed(2),cost:odds.toFixed(2),QUARTETS:s2[3],BetLabel:"",BetsInfo:"",BetColor:0,Q8:s2[2],Q9:s2[3],Q10:s2[4],Q8Color:getQtColor(s2[2]),Q9Color:getQtColor(s2[3]),Q10Color:getTfColor(s2[4]),_odds:odds,color:colgap>=0?colgap:color,pctChange:""};
   });
-
-  let total=e+d; let fic="";
-  if(total<=8.1)fic="X"; if(total==9&&e>=5)fic="Q"; if(total>=10&&total<=12.1&&e<=8.9)fic="A";
-  if(total>=10&&total<=12.1&&e>=9)fic="B"; if(total>=13&&e<=8.9)fic="D"; if(total>=15&&e>=9)fic="H";
-
+  let total=e+d; let fic=""; if(total<=8.1)fic="X"; if(total==9&&e>=5)fic="Q"; if(total>=10&&total<=12.1&&e<=8.9)fic="A"; if(total>=10&&total<=12.1&&e>=9)fic="B"; if(total>=13&&e<=8.9)fic="D"; if(total>=15&&e>=9)fic="H";
   let yyy="no"; if(total>=10&&total<=12.1&&data.length==14)yyy="B14 YES"; if(total>=15&&e>=9)yyy="H YES";
   let e1=parseFloat(sorted[0].winDiv); let verd=e1<=2.11?"SF OK":e1<=5.21?"OK Fav":e1>=5.62?"WF OK":"";
-
   document.getElementById("head").innerHTML=`Q5:${e}+${d}/${data.length} | ${fic} | ${yyy} | ${verd}`;
 }
 
-// 4. BETTING: Parse bets
 function processBets(){
   const labels=["Fav","2nd","3rd","4th","5th","6th","-7-","-8-","-9-","*10*","-11-","-12-","-13-","-14-","-15-"];
-  sheet1Data.forEach((h,i)=>{
-    h.BetLabel=labels[i]||"";
-    let betStr=""; let inv=0;
-    for(let b=1;b<=3;b++){ let bi=h['bet'+b]; if(bi){ let p=bi.split(',').map(n=>parseInt(n)||'?').join('.')+'.'; betStr+=p+" "; }}
-    h.BetsInfo=inv?"Invalid":betStr; h.BetColor=parseInt(h.betColor1)||0;
-  });
+  sheet1Data.forEach((h,i)=>{ h.BetLabel=labels[i]||""; let betStr=""; for(let b=1;b<=3;b++){ let bi=h['bet'+b]; if(bi){ let p=bi.split(',').map(n=>parseInt(n)||'?').join('.')+'.'; betStr+=p+" "; }} h.BetsInfo=betStr; h.BetColor=parseInt(h.betColor1)||0; });
 }
 
-// 5. POSSORT: % change + Scratch
 function posSort(){
-  if(oldHorse.length===0){ oldHorse=sheet1Data.map(h=>({no:h.No,odds:h.Odds})); return; }
-  sheet1Data.forEach(h=>{
-    let old=oldHorse.find(o=>o.no===h.No);
-    if(old){ let pct=Math.floor((old.odds/h.Odds-1)*100); h.pctChange=pct+"%"; }
-    else{ h.pctChange="SCR"; }
-  });
-  if(sheet1Data.length!==oldHorse.length){
-    document.getElementById("head").style.background="#f00";
-    document.getElementById("head").innerHTML+=" | LATE SCRATCHING";
-  }
-  oldHorse=sheet1Data.map(h=>({no:h.No,odds:h.Odds}));
+  if(oldHorse.length===0){ oldHorse=sheet1Data.map(h=>({no:h.No,odds:parseFloat(h.Odds)})); return; }
+  sheet1Data.forEach(h=>{ let old=oldHorse.find(o=>o.no===h.No); if(old){ let pct=Math.floor((old.odds/parseFloat(h.Odds)-1)*100); h.pctChange=pct+"%"; } else{ h.pctChange="SCR"; } });
+  if(sheet1Data.length!==oldHorse.length){ document.getElementById("head").style.background="#f00"; document.getElementById("head").innerHTML+=" | LATE SCRATCHING"; }
+  oldHorse=sheet1Data.map(h=>({no:h.No,odds:parseFloat(h.Odds)}));
 }
 
-// MAIN LOAD
-function loadFile(){
-  const file=document.getElementById('csvFile').files[0]; if(!file){alert("Pick file");return;}
-  const reader=new FileReader();
-  reader.onload=e=>{
-    let lines=e.target.result.split('\n').map(r=>r.split(','));
-    let headers=lines[0].map(h=>h.trim());
-    let raw=cleanTabtouchData(lines);
-    let data=raw.map(r=>{let o={};headers.forEach((h,i)=>o[h]=r[i]?.trim());return o;});
+function processCSVLines(lines){
+  let headers=lines[0].split(',').map(h=>h.trim());
+  let map = mapHeaders(headers);
+  let raw=cleanTabtouchData(lines);
+  let data=raw.map(r=>{
+    return {
+      raceDate:r[map.raceDate], raceID:r[map.raceID], course:r[map.course], weather:r[map.weather], going:r[map.going],
+      raceNo:r[map.raceNo], distance:r[map.distance], class:r[map.class], starts:r[map.starts], divis:r[map.divis],
+      number:r[map.number], winDiv:r[map.winDiv], starterName:r[map.starterName],
+      win:r[map.win], qt:r[map.qt], tf:r[map.tf], bet1:r[map.bet1], betColor1:r[map.betColor1],
+    ...Object.fromEntries([...Array(10)].map((_,i)=>[`r${i+1}`,""])),
+    ...Object.fromEntries([...Array(10)].map((_,i)=>[`q${i+1}`,""]))
+    }
+  }).filter(d=>d.number);
 
-    sheet2Data=data.map(d=>[parseInt(d.number),d.starterName,parseFloat(d.win),parseFloat(d.qt),parseFloat(d.tf)]);
-    processRaceHeader(data[0]);
-    processHorses(data);
-    processBets();
-    posSort();
-    render();
-  }
+  if(data.length===0){ alert("No horse data found. Check headers: Number, Horse, WinDiv"); return; }
+
+  sheet2Data=data.map(d=>[parseInt(d.number),d.starterName,parseFloat(d.win)||0,parseFloat(d.qt)||0,parseFloat(d.tf)||0]);
+  processRaceHeader(data[0]);
+  processHorses(data);
+  processBets();
+  posSort();
+  render();
+}
+
+function loadFile(){
+  const file=document.getElementById('csvFile').files[0]; if(!file){alert("Pick file first");return;}
+  const reader=new FileReader();
+  reader.onload=e=>{ let lines=e.target.result.split('\n').filter(r=>r.trim()!==""); processCSVLines(lines); }
   reader.readAsText(file);
 }
 
-function render(){
-  // Update info
-  Object.keys(raceInfo).forEach(k=>{if(document.getElementById(k))document.getElementById(k).innerHTML='<b>'+k+':</b> '+raceInfo[k]});
+function loadUploaded(){
+  fetch('/mnt/data.csv').then(r => r.text()).then(txt => { let lines = txt.split('\n').filter(r=>r.trim()!==""); processCSVLines(lines); })
+ .catch(err => alert("Can't read uploaded file: " + err))
+}
 
-  let headers="Fav,Order,Horse,No,Gap,Odds,cost,Change,QUARTETS,BetLabel,Bets,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10,R1,R2,R3,R4,R5,R6,R7,R8,R9,R10".split(',');
+function render(){
+  let headers="Fav,Order,Horse,No,Gap,Odds,Cost,Change,QUARTETS,Bet,Bets,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10".split(',');
   let h="<table><tr>"+headers.map(x=>'<th>'+x+'</th>').join('')+"</tr>";
   sheet1Data.forEach(x=>{
     let row=`<td style="background:${getC(x.color)}">${x.Fav}</td><td>${x.Order}</td><td>${x.Horse}</td><td>${x.No}</td>`;
     row+=`<td style="background:${getC(x.color)}">${x.Colour}</td><td>${x.Odds}</td><td>${x.cost}</td><td style="color:red">${x.pctChange}</td>`;
     row+=`<td style="background:${x.Q9Color}">${x.QUARTETS}</td><td>${x.BetLabel}</td><td style="background:${getC(x.BetColor)}">${x.BetsInfo}</td>`;
     for(let q=1;q<=10;q++)row+=`<td style="background:${x['Q'+q+'Color']||''}">${x['Q'+q]||''}</td>`;
-    for(let r=1;r<=10;r++)row+=`<td>${x['R'+r]||''}</td>`;
     h+='<tr>'+row+'</tr>';
   });
   document.getElementById("tbl").innerHTML=h+"</table>";
 }
 
 function sortHorses(){ sheet1Data.sort((a,b)=>a._odds-b._odds); posSort(); sheet1Data.forEach((x,i)=>x.Fav=i+1); render(); }
-function downloadExcel(){ const ws=XLSX.utils.json_to_sheet(sheet1Data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1"); XLSX.writeFile(wb,raceInfo.raceName+".xlsx"); }
+function downloadExcel(){ const ws=XLSX.utils.json_to_sheet(sheet1Data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1"); XLSX.writeFile(wb,(raceInfo.raceName||"Race")+".xlsx"); }
 function newRace(){ document.getElementById("csvFile").value=""; document.getElementById("tbl").innerHTML="Select file and click Update"; oldHorse=[]; }
 </script>
 </body>
