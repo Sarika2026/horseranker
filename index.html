@@ -1,151 +1,135 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tabtouch Race Fetcher</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheet1 - Tabtouch Ranker</title>
 <style>
-  body { font-family: Arial; padding: 15px; background: #0a0a0a; color: #eee; }
-  h2 { color: #4CAF50; }
-  input, button { padding: 12px; margin: 8px 0; width: 100%; font-size: 16px; border-radius: 6px; border: none; }
-  input { background: #222; color: #eee; }
-  button { background: #4CAF50; color: white; font-weight: bold; cursor: pointer; }
-  button.secondary { background: #2196F3; }
-  button.danger { background: #f44336; }
-  button:disabled { background: #555; }
-  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-  th, td { border: 1px solid #333; padding: 8px; text-align: left; }
-  th { background: #1a1a1a; color: #4CAF50; }
-  #status { margin-top: 10px; color: #ffcc00; }
- .btn-row { display: flex; gap: 10px; }
+  body{font-family:Arial;margin:5px;background:#eee;font-size:12px}
+ .btn{padding:8px 12px;background:#007bff;color:#fff;border:0;border-radius:4px;font-size:14px;margin-right:5px}
+ .btn.green{background:#28a745}
+ .btn.orange{background:#fd7e14}
+ .header{background:#fff;padding:8px;border-radius:4px;margin:8px 0;font-weight:bold}
+  table{width:100%;border-collapse:collapse;background:#fff;margin-top:5px;font-size:11px}
+  td,th{border:1px solid #ddd;padding:4px;text-align:center;white-space:nowrap;cursor:pointer}
+  th{background:#f1f1f1}
+ .colA{width:30px;font-weight:bold}
+ .colD{text-align:left;padding-left:5px}
+  input{width:95%;padding:5px;margin-bottom:8px;border:1px solid #ccc;border-radius:4px}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-<h2>Tabtouch Race Fetcher</h2>
 
-<label>Race URL:</label>
-<input id="race" type="text" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/6">
+<input id="url" placeholder="Paste Tabtouch Race URL here" value="https://www.tabtouch.com.au/racing/2026-08-05/orb/1">
 
-<button id="btn" onclick="fetchRace()">FETCH RACE</button>
+<button class="btn" onclick="loadData()">🔄 Refresh</button>
+<button class="btn green" onclick="rankHorses()">🏆 Rank Horses</button>
+<button class="btn orange" onclick="downloadExcel()">📥 Download Excel</button>
 
-<div class="btn-row" id="downloadBtns" style="display:none;">
-  <button class="secondary" onclick="runLogic()">RUN LOGIC</button>
-  <button class="secondary" onclick="downloadCSV()">CSV</button>
-  <button class="secondary" onclick="downloadTXT()">TXT</button>
-</div>
-<button class="danger" onclick="clearData()">CLEAR SAVED DATA</button>
-
-<div id="status"></div>
-<div id="results"></div>
+<div id="head" class="header">Q5: - Q4: - Q20: -</div>
+<div id="tbl">Click Refresh to load data</div>
 
 <script>
-const API_URL = "https://tabtouch-api.onrender.com";
-let raceData = []; 
+let currentData = [];
+let sortCol = -1;
+let sortAsc = true;
 
-// AUTO-LOAD when page opens
-window.onload = function(){
-  let saved = localStorage.getItem("tabtouchRace");
-  if(saved){
-    raceData = JSON.parse(saved);
-    document.getElementById('status').innerText = "Loaded saved race: " + raceData.length + " runners";
-    document.getElementById('downloadBtns').style.display = "flex";
-    showTable();
-  }
+// DEMO DATA - Replace this with API call later
+const DEMO = {
+  runners: [
+    {number:1,name:"Fast Horse",odds:3.50,jockey:"J Smith",barrier:4},
+    {number:2,name:"Slow Runner",odds:26.00,jockey:"A Lee",barrier:2},
+    {number:3,name:"Mid One",odds:8.00,jockey:"K Brown",barrier:7},
+    {number:4,name:"Long Shot",odds:45.00,jockey:"M Davis",barrier:1},
+    {number:5,name:"Fav",odds:2.20,jockey:"P Jones",barrier:3},
+  ]
 }
 
-async function fetchRace(){
-  const btn = document.getElementById('btn');
-  btn.disabled = true;
-  btn.innerText = "FETCHING...";
-  document.getElementById('status').innerText = "Fetching race data... This takes 30-50s first time";
-  
-  try {
-    let res = await fetch(API_URL + '/api/tabtouch', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ url: document.getElementById('race').value })
+function processRace(data, raceId) {
+    let horses = [...data.runners].sort((a,b) => a.number - b.number);
+    const noHorses = horses.length;
+    let e = 0, d = 0;
+    horses.forEach(h => {
+        if(h.odds > 1.1 && h.odds < 23.25) e++;
+        if(h.odds >= 23.25 && h.odds <= 66.66) d++;
     });
-    let data = await res.json();
     
-    if(data.ok){
-      raceData = data.horses;
-      saveData(); // SAVE TO PHONE
-      document.getElementById('status').innerText = "Done: Found " + raceData.length + " runners. Saved.";
-      document.getElementById('downloadBtns').style.display = "flex";
-      showTable();
-    } else {
-      document.getElementById('status').innerText = "Error: " + data.error;
-    }
-  } catch(e) {
-    document.getElementById('status').innerText = "Error: Could not connect to API";
-  }
+    let rows = horses.map((h, i) => {
+        let A = i + 1; let D = h.name || "";
+        let K = parseFloat(h.odds) || 0;
+        let P = " "; // Will calculate after 2nd refresh
+        let H = K; 
+        let color = i === 0? 4 : i <= 5? 35 : i <= 7? 38 : i === 8? 39 : i <= 12? 46 : 0;
+        return { A, D, J: h.number, K, L: h.jockey, N: h.barrier, H, P, color, rank: A }
+    });
+    
+    let Q5 = e + " + " + d;
+    let fication = (e+d)<=8.1?"X":(e+d)>=10&&(e+d)<=12.1&&e<=8.9?"A":(e+d)>=10&&(e+d)<=12.1&&e>=9?"B":(e+d)>=13&&e<=8.9?"D":(e+d)>=13&&(e+d)<=14.1&&e>=9?"E":(e+d)>=15&&e>=9?"H":"";
+    let yyy = "no"; if((e+d)>=10&&(e+d)<=12.1&&noHorses>=14) yyy="B14/BE YES "; if((e+d)>=13&&(e+d)<=20.1&&e===5) yyy="yes D5"; if((e+d)>=15&&e>=9) yyy="H YES";
+    let yyyColor = yyy.includes("YES")?4:yyy.includes("no")?0:26;
+    return {rows, Q5, Q4:fication, Q20:yyy, Q20Color:yyyColor};
+}
+
+function render(data){
+  currentData = data.rows;
+  document.getElementById("head").innerHTML = 
+    '<b>Q5:</b>'+data.Q5+' <b>Q4:</b>'+data.Q4+' <b>Q20:</b><span style="background:'+getC(data.Q20Color)+';padding:2px 4px">'+data.Q20+'</span>';
   
-  btn.disabled = false;
-  btn.innerText = "FETCH RACE";
-}
-
-function runLogic(){
-  if(raceData.length === 0){ alert("Fetch race first"); return; }
+  let h="<table><tr>"+
+    th("Rank","rank")+th("A","A")+th("Horse","D")+th("No","J")+th("Odds","K")+th("H","H")+th("Barrier","N")+th("P%","P")+
+    "</tr>";
   
-  // EXAMPLE LOGIC: Score = 10 - Barrier
-  raceData.forEach(h => {
-    let barrier = parseInt(h.N) || 20;
-    h.Score = 10 - barrier; 
+  currentData.forEach((x)=>{
+    let bg=getC(x.color);
+    h+='<tr style="background:'+bg+'"><td>'+x.rank+'</td><td class=colA>'+x.A+'</td><td class=colD>'+x.D+'</td><td>'+x.J+'</td><td>'+x.K+'</td><td>'+x.H+'</td><td>'+x.N+'</td><td>'+x.P+'%</td></tr>'
   });
-  raceData.sort((a,b) => b.Score - a.Score);
-  saveData(); // SAVE AFTER LOGIC
-  showTable();
+  document.getElementById("tbl").innerHTML=h+"</table>";
 }
 
-function showTable(){
-  let table = `<table><tr><th>Rank</th><th>No</th><th>Horse</th><th>Jockey</th><th>Barrier</th><th>Score</th><th>Odds</th></tr>`;
-  raceData.forEach((h,i) => {
-    table += `<tr><td>${i+1}</td><td>${h.J}</td><td>${h.K}</td><td>${h.L}</td><td>${h.N}</td><td><b>${h.Score || '-'}</b></td><td>${h.M}</td></tr>`;
+function th(name, key){
+  return '<th onclick="sortTable(\''+key+'\')">'+name+' ↕</th>'
+}
+
+function sortTable(key){
+  if(sortCol === key) sortAsc =!sortAsc; else sortAsc = true;
+  sortCol = key;
+  currentData.sort((a,b)=>{
+    if(a[key] < b[key]) return sortAsc? -1 : 1;
+    if(a[key] > b[key]) return sortAsc? 1 : -1;
+    return 0;
   });
-  table += `</table>`;
-  document.getElementById('results').innerHTML = table;
+  render({rows:currentData, Q5:"", Q4:"", Q20:"", Q20Color:0});
 }
 
-function saveData(){
-  localStorage.setItem("tabtouchRace", JSON.stringify(raceData));
+function rankHorses(){
+  currentData.sort((a,b)=>a.K - b.K); // Rank by lowest odds = Fav
+  currentData.forEach((x,i)=>x.rank = i+1);
+  render({rows:currentData, Q5:"", Q4:"", Q20:"", Q20Color:0});
 }
 
-function clearData(){
-  localStorage.removeItem("tabtouchRace");
-  raceData = [];
-  document.getElementById('results').innerHTML = "";
-  document.getElementById('downloadBtns').style.display = "none";
-  document.getElementById('status').innerText = "Data cleared";
+function downloadExcel(){
+  const ws = XLSX.utils.json_to_sheet(currentData.map(x=>({
+    Rank:x.rank, A:x.A, Horse:x.D, No:x.J, Odds:x.K, H:x.H, Barrier:x.N, "P%":x.P
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  XLSX.writeFile(wb, "Sheet1_Ranked.xlsx");
 }
 
-function downloadCSV(){
-  let csv = "Rank,No,Horse,Jockey,Barrier,Score,Odds\n";
-  raceData.forEach((h,i) => {
-    csv += `${i+1},${h.J},"${h.K}","${h.L}",${h.N},${h.Score || '-'},${h.M}\n`;
-  });
-  downloadFile(csv, "race.csv", "text/csv");
+function getC(i){return {4:"#0f0",35:"#92D050",38:"#FFC000",39:"#f00",46:"#FF9966",26:"#FFD700",0:"#fff"}[i]||"#fff"}
+
+function loadData(){
+  document.getElementById("tbl").innerHTML="Loading Demo...";
+  setTimeout(()=>{
+    let url = document.getElementById("url").value;
+    let raceId = url.split("/").slice(-2).join("_");
+    let data = processRace(DEMO, raceId);
+    render(data);
+  }, 500);
 }
 
-function downloadTXT(){
-  let txt = "Rank | No | Horse | Jockey | Barrier | Score | Odds\n";
-  txt += "--------------------------------------------------\n";
-  raceData.forEach((h,i) => {
-    txt += `${i+1} | ${h.J} | ${h.K} | ${h.L} | ${h.N} | ${h.Score || '-'} | ${h.M}\n`;
-  });
-  downloadFile(txt, "race.txt", "text/plain");
-}
-
-function downloadFile(content, filename, type){
-  const blob = new Blob([content], { type: type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+// Auto load
+loadData();
 </script>
 </body>
 </html>
