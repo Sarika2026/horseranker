@@ -1,267 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0056b3">
-<title>Ozbet Tool</title>
-<link rel="manifest" href="manifest.json">
-<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-<style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial; background:#ffffff; color:#222; padding:8px; margin:0; font-size:13px; }
-    h2 { font-size:16px; margin:4px 0 8px; color:#0056b3; text-align:center; }
-    h3 { color:#0056b3; margin:12px 0 6px; font-size:14px; }
-    #topbar { display:flex; gap:4px; margin-bottom:8px; align-items:center; flex-wrap:wrap; }
-    input { padding:6px; font-size:13px; border-radius:5px; border:1px solid #ccc; background:#fff; color:#222; text-transform:uppercase; }
-    #racename { width:50px; flex:0 0 50px; }
-    #raceno { width:45px; flex:0 0 45px; }
-    button { padding:6px 8px; font-size:11px; border-radius:5px; border:none; font-weight:600; cursor:pointer; flex:1; min-width:70px; }
-   .btn-new { background:#007bff; color:#fff; }
-   .btn-refresh { background:#ffc107; color:#000; }
-   .btn-dl { background:#28a745; color:#fff; }
-   .btn-excel { background:#6f42c1; color:#fff; }
-    table { width:100%; border-collapse:collapse; margin-top:8px; font-size:11px; }
-    th, td { border:1px solid #ddd; padding:3px 2px; text-align:center; white-space:nowrap; }
-    th { background:#f1f3f5; color:#000; position:sticky; top:0; z-index:1; font-weight:600; }
-   .blue { background:#d0f4f7; color:#000; font-weight:600; }
-   .pink { background:#f8d7f0; color:#000; font-weight:600; }
-   .purple { background:#e2d6f3; color:#000; font-weight:600; }
-   .gapwarn { background:#fff3cd; color:#000; font-weight:600; }
-   .pr6hl { background:#d0f4f7; color:#000; font-weight:600; }
-   .rangefav { background:#d0f4f7; color:#000; font-weight:600; }
-   .changed { background:#f8d7da; color:#721c24; font-weight:600; }
-    pre { background:#f8f9fa; color:#333; padding:6px; overflow-x:auto; font-size:9px; max-height:100px; border:1px solid #ddd; border-radius:4px; }
-    #status { margin:6px 0; color:#d39e00; font-weight:600; text-align:center; font-size:12px; }
-    #summary { background:#f8f9fa; padding:8px; margin:8px 0; border-radius:6px; display:flex; gap:8px; flex-wrap:wrap; justify-content:space-between; border:1px solid #dee2e6; }
-    #summary div { background:#fff; padding:6px 8px; border-radius:4px; text-align:center; flex:1; min-width:80px; border:1px solid #dee2e6; }
-    #summary b { color:#0056b3; font-size:11px; display:block; }
-    #range, #output, #excelview { overflow-x:auto; -webkit-overflow-scrolling: touch; }
-    #excelview table { font-size:10px; }
-</style>
+  <title>Horseranker 3.1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial; padding: 15px; background: #111; color: #eee; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #444; padding: 8px; text-align: left; }
+    th { background: #222; }
+    pre { background: #222; padding: 10px; white-space: pre-wrap; }
+  </style>
 </head>
 <body>
-
-<h2>Ozbet Race Tool</h2>
-
-<div id="topbar">
-    <input type="text" id="racename" placeholder="MR" value="MR" maxlength="3">
-    <input type="number" id="raceno" placeholder="7" value="7">
-    <button class="btn-new" onclick="newRace()">NEW</button>
-    <button class="btn-refresh" onclick="refreshRace()">REFRESH</button>
-    <button class="btn-excel" onclick="showExcelView()">EXCEL VIEW</button>
-    <button class="btn-dl" onclick="downloadXLSX()">DOWNLOAD</button>
-</div>
-
-<div id="status">Enter Name + Number and tap NEW</div>
-<div id="summary"></div>
-
-<h3>Range Table</h3>
-<div id="range"></div>
-
-<h3>Result Table</h3>
-<div id="output"></div>
-
-<h3>Excel View</h3>
-<div id="excelview">Tap EXCEL VIEW after NEW</div>
-
-<h3>Raw Data</h3>
-<pre id="raw">Waiting...</pre>
+  <h2 id="version">Loading...</h2>
+  <h3 id="range"></h3>
+  <pre id="raw"></pre>
+  
+  <table>
+    <thead>
+      <tr><th>Horse</th><th>Jockey</th><th>Weight</th><th>Odds</th></tr>
+    </thead>
+    <tbody id="horseTable">
+      <tr><td colspan="4">Loading data...</td></tr>
+    </tbody>
+  </table>
 
 <script>
-let lastURL = "";
-let rawLines = [];
-let parsedData = [];
-let prevData = {};
-let prevRangeData = [];
-let raceInfo = {startTime:"-", winPool:"-", tfPool:"-"};
-
-const RANGE_DATA = ['Fav','2nd-4th+10th-12th','7th-13th',' ','5th-8th','5th-9th','6th-10th','F+6th-10th',' ','10th-15th','F+10th-17th','10th-13th','8th&9th','9,14,15th','14th&15th',' ','top 2','F-4th','8th-14th',' ','9th-16th','8th-15th','8th-16th'];
-const RANGE_VALS = ['0','1,2,3,9,10,11','6,7,8,9,10,11,12', ' ','4,5,6,7','4,5,6,7,8','5,6,7,8,9','0,5,6,7,8,9',' ','9,10,11,12,13,14','0,9,10,11,12,13,14,15,16','9,10,11,12','7,8','8,13,14','13,14', ' ','0,1','0,1,2,3','7,8,9,10,11,12,13',' ','8,9,10,11,12,13,14,15','7,8,9,10,11,12,13,14','7,8,9,10,11,12,13,14,15'];
-
-function getToday(){
-    let d = new Date();
-    let y = d.getFullYear();
-    let m = String(d.getMonth()+1).padStart(2,'0');
-    let day = String(d.getDate()).padStart(2,'0');
-    return `${day}.${m}.${y}`;
-}
-function getSuffix(n){
-    if(n==1) return 'Fav';
-    if(n==2) return 'nd';
-    if(n==3) return 'rd';
-    return 'th';
-}
-async function newRace(){
-    prevRangeData = [];
-    let name = document.getElementById('racename').value.trim().toUpperCase();
-    let no = document.getElementById('raceno').value.trim();
-    let date = getToday();
-    if(name == "" || no == ""){ document.getElementById('status').innerText = "ERROR: Enter Name and Number"; return; }
-    let url = `http://www.ozbet.com.au/ozbet/plsql/ozbet.ToteForARace?p_device=TEXT&p_date=${date}&p_fixture_id=${name}&p_contest_number=${no}`;
-    lastURL = url;
-    await fetchData(url, false);
-}
-async function refreshRace(){
-    if(lastURL == ""){ document.getElementById('status').innerText = "ERROR: Tap NEW first"; return; }
-    await fetchData(lastURL, true);
-}
-async function fetchData(ozbetURL, isRefresh){
-    document.getElementById('status').innerText = "Fetching...";
-    document.getElementById('raw').innerText = "Fetching...";
-    try{
-        let res = await fetch(ozbetURL);
-        let text = await res.text();
-        rawLines = text.split('\n');
-        document.getElementById('raw').innerText = text;
-        if(text.length < 20 ||!text.includes(",")){
-            document.getElementById('status').innerText = "ERROR: No data / Race not started";
-            buildRangeTable(false); buildTable(); buildSummary(); return;
-        }
-        parseHeader(text); parseData(text);
-        if(parsedData.length == 0){
-            document.getElementById('status').innerText = "ERROR: No runners found";
-            buildRangeTable(false); buildTable(); buildSummary(); return;
-        }
-        if(isRefresh){ calcDiff(); }
-        calcGap(); buildRangeTable(isRefresh); buildTable(); buildSummary();
-        document.getElementById('status').innerText = `Done. ${parsedData.length} runners`;
-    }catch(e){
-        document.getElementById('status').innerText = "ERROR: " + e.message;
-    }
-}
-function parseHeader(text){
-    raceInfo = {startTime:"-", winPool:"-", tfPool:"-"};
-    rawLines.forEach(line=>{
-        if(line.toLowerCase().includes("starttime")){
-            let parts = line.split(','); let idx = parts.findIndex(p=>p.toLowerCase().includes("starttime"));
-            if(idx!= -1 && parts[idx+1]) raceInfo.startTime = parts[idx+1].trim();
-        }
-        if(line.toLowerCase().includes("win") &&!line.toLowerCase().includes("win%")){
-            let parts = line.split(','); let idx = parts.findIndex(p=>p.toLowerCase()=="win");
-            if(idx!= -1 && parts[idx+1]) raceInfo.winPool = parseFloat(parts[idx+1]).toLocaleString('en-IN');
-        }
-        if(line.toLowerCase().includes("tf")){
-            let parts = line.split(','); let idx = parts.findIndex(p=>p.toLowerCase()=="tf");
-            if(idx!= -1 && parts[idx+1]) raceInfo.tfPool = parseFloat(parts[idx+1]).toLocaleString('en-IN');
-        }
-    });
-}
-function parseData(text){
-    parsedData = [];
-    rawLines.forEach(line => {
-        line = line.trim(); if(line == "") return;
-        let cols = line.split(',');
-        if(cols.length >= 12 &&!isNaN(parseInt(cols[0]))){
-            parsedData.push({
-                number: parseInt(cols[0]), horse: cols[1].trim(),
-                win: parseFloat(cols[2]) || 999, place: parseFloat(cols[3]) || 0,
-                pr: cols.slice(4,12), q: cols[cols.length-2] || "-", e: cols[cols.length-1] || "-"
-            });
-        }
-    });
-    parsedData.sort((a,b) => a.win - b.win || a.place - b.place);
-}
-function calcGap(){
-    parsedData.forEach((d,i) => {
-        d.gap = i>0? parsedData[i-1].win / d.win : 0;
-        d.d = (i+1) + getSuffix(i+1);
-    });
-}
-function calcDiff(){
-    parsedData.forEach(p => p.diff = prevData[p.number]? ((p.win / prevData[p.number]) - 1) * 100 : 0);
-    prevData = {}; parsedData.forEach(p=> prevData[p.number]=p.win);
-}
-function buildRangeTable(isRefresh){
-    let currentRange = [];
-    if(parsedData.length > 0){
-        currentRange = RANGE_VALS.map(v => v.split(',').map(x=>parseInt(x)).filter(x=>x<parsedData.length).map(x=>parsedData[x].number).join(','));
-    } else {
-        currentRange = RANGE_VALS.map(() => "-");
-    }
-    let html = `<table><tr><th>New Range</th><th>Val</th>${isRefresh?'<th>Prev</th>':''}</tr>`;
-    RANGE_DATA.forEach((range,i) => {
-        if(range.trim() == "") { html += `<tr><td colspan=${isRefresh?3:2} style="height:3px; background:#eee;"></td></tr>`; return; }
-        let rowClass = range.toLowerCase().includes('fav')? 'class="rangefav"' : '';
-        let prevVal = isRefresh && prevRangeData[i]? prevRangeData[i] : "-";
-        let changedClass = isRefresh && parsedData.length>0 && prevVal!= currentRange[i]? 'class="changed"' : '';
-        html += `<tr ${rowClass}><td style="text-align:left">${range}</td><td ${changedClass}>${currentRange[i]}</td>${isRefresh?`<td>${prevVal}</td>`:''}</tr>`;
-    });
-    document.getElementById('range').innerHTML = html + "</table>";
-    if(parsedData.length > 0) prevRangeData = [...currentRange];
-}
-function buildTable(){
-    let html = `<table><tr><th>Rk</th><th>No</th><th style="text-align:left">Horse</th><th>Win</th><th>Pl</th><th>G</th><th>D</th><th>%</th>${[...Array(8)].map((_,i)=>`<th>PR${i+1}</th>`).join('')}<th>Q</th><th>E</th></tr>`;
-    parsedData.forEach((d,i) => {
-        let rowClass = i<6?"blue":i<8?"pink":i<12?"purple":"";
-        let gapClass = d.gap > 1.75? "gapwarn" : "";
-        html += `<tr class="${rowClass}"><td>${i+1}</td><td>${d.number}</td><td style="text-align:left">${d.horse}</td><td>${d.win.toFixed(2)}</td><td>${d.place.toFixed(2)}</td><td class="${gapClass}">${d.gap? d.gap.toFixed(3):'-'}</td><td>${d.d}</td><td>${d.diff? d.diff.toFixed(1)+'%':'-'}</td>`;
-        d.pr.forEach((p,idx) => html += `<td class="${idx==5 && i<6? 'pr6hl':''}">${p}</td>`);
-        html += `<td>${d.q}</td><td>${d.e}</td></tr>`;
-    });
-    document.getElementById('output').innerHTML = html + "</table>";
-}
-function buildSummary(){
-    let c1 = parsedData.filter(p=>p.win<=23.2).length;
-    let c2 = parsedData.filter(p=>p.win>23.2 && p.win<=66.7).length;
-    document.getElementById('summary').innerHTML =
-    `<div><b>Start</b>${raceInfo.startTime}</div>
-     <div><b>Win</b>${raceInfo.winPool}</div>
-     <div><b>TF</b>${raceInfo.tfPool}</div>
-     <div><b>Count</b>${c1} + ${c2} / ${parsedData.length}</div>`;
-}
-function showExcelView(){
-    if(parsedData.length == 0){ alert("No data. Tap NEW first"); return; }
-    let aoa1 = [["Rk","No","Horse","Win","Place","G","D","Diff%","PR1","PR2","PR3","PR4","PR5","PR6","PR7","PR8","Q","E"]];
-    parsedData.forEach((d,i)=> aoa1.push([i+1, d.number, d.horse, d.win, d.place, d.gap, d.d, d.diff,...d.pr, d.q, d.e]));
-    let ws = XLSX.utils.aoa_to_sheet(aoa1);
-    // Add colors
-    for(let R = 1; R <= parsedData.length; R++){
-        let color = R <= 6? "D0F4F7" : R <= 8? "F8D7F0" : R <= 12? "E2D6F3" : "FFFFFF";
-        for(let C = 0; C < 18; C++){
-            let cell = ws[XLSX.utils.encode_cell({r:R,c:C})];
-            if(cell) cell.s = {fill:{fgColor:{rgb:color}}};
-        }
-    }
-    let html = XLSX.utils.sheet_to_html(ws, {editable:false});
-    document.getElementById('excelview').innerHTML = html;
-    document.getElementById('excelview').scrollIntoView();
-}
-function downloadXLSX(){
-    if(parsedData.length == 0){ alert("No data. Tap NEW first"); return; }
-    let name = document.getElementById('racename').value.trim().toUpperCase();
-    let no = document.getElementById('raceno').value.trim();
-    let aoa1 = [["Rk","No","Horse","Win","Place","G","D","Diff%","PR1","PR2","PR3","PR4","PR5","PR6","PR7","PR8","Q","E"]];
-    parsedData.forEach((d,i)=> aoa1.push([i+1, d.number, d.horse, d.win, d.place, d.gap, d.d, d.diff,...d.pr, d.q, d.e]));
-    let aoa2 = [["New Range","Val"]];
-    RANGE_DATA.forEach((r,i)=> aoa2.push([r, RANGE_VALS[i].split(',').map(x=>parseInt(x)).filter(x=>x<parsedData.length).map(x=>parsedData[x].number).join(',')]));
-    let aoa3 = [["Start Time", raceInfo.startTime],["Win Pool", raceInfo.winPool],["TF Pool", raceInfo.tfPool],["Count", `${parsedData.filter(p=>p.win<=23.2).length} + ${parsedData.filter(p=>p.win>23.2 && p.win<=66.7).length} / ${parsedData.length}`]];
-    let aoa4 = [["RAW DATA FROM OZBET"],...rawLines.map(l=>[l])];
-    let wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa1), "Sheet1");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa2), "Ranges");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa3), "Summary");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa4), "RAW");
-    XLSX.writeFile(wb, `Result_${name}${no}.xlsx`);
-    document.getElementById('status').innerText = `Downloaded Result_${name}${no}.xlsx`;
-}
-</script>
-   <script>
 fetch('data.json?v=3.1')
-  .then(res => res.json())
+  .then(res => {
+    if(!res.ok) throw new Error('data.json not found');
+    return res.json();
+  })
   .then(data => {
+    document.getElementById('version').innerText = 'Version: ' + data.version + ' | ' + data.date;
     document.getElementById('range').innerText = data.range;
     document.getElementById('raw').innerText = data.raw;
     
-    let table = '';
+    let rows = '';
     data.horses.forEach(h => {
-      table += <tr><td>${h.name}</td><td>${h.jockey}</td><td>${h.odds}</td></tr>;
+      rows += `<tr><td>${h.name}</td><td>${h.jockey}</td><td>${h.weight}</td><td>${h.odds}</td></tr>`;
     });
-    document.getElementById('horseTable').innerHTML = table;
-    
-    document.getElementById('version').innerText = 'v' + data.version;
+    document.getElementById('horseTable').innerHTML = rows;
   })
-  .catch(err => console.log('Error loading data:', err));
+  .catch(err => {
+    document.getElementById('version').innerText = 'Error: ' + err;
+    console.log(err);
+  });
 </script>
 </body>
 </html>
