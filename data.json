@@ -1,0 +1,11 @@
+{
+  "version": "3.1",
+  "date": "2026-08-07",
+  "range": "Race 1 to Race 8 - Chennai",
+  "raw": "Paste your full raw text here",
+  "horses": [
+    {"name": "Thunder Bolt", "jockey": "R.Singh", "weight": "58", "odds": "3.2"},
+    {"name": "Desert King", "jockey": "A.Kumar", "weight": "56", "odds": "5.5"},
+    {"name": "Speed Star", "jockey": "V.Rao", "weight": "57", "odds": "4.1"}
+  ]
+}
