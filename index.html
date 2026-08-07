@@ -246,5 +246,22 @@ function downloadXLSX(){
     document.getElementById('status').innerText = `Downloaded Result_${name}${no}.xlsx`;
 }
 </script>
+   <script>
+fetch('data.json?v=3.1')
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById('range').innerText = data.range;
+    document.getElementById('raw').innerText = data.raw;
+    
+    let table = '';
+    data.horses.forEach(h => {
+      table += <tr><td>${h.name}</td><td>${h.jockey}</td><td>${h.odds}</td></tr>;
+    });
+    document.getElementById('horseTable').innerHTML = table;
+    
+    document.getElementById('version').innerText = 'v' + data.version;
+  })
+  .catch(err => console.log('Error loading data:', err));
+</script>
 </body>
 </html>
